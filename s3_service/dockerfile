@@ -1,0 +1,15 @@
+FROM golang:1.19.2-bullseye
+
+RUN mkdir /app
+
+WORKDIR /app
+
+COPY . .
+
+RUN go mod download
+
+RUN go build -o /s3_service
+
+EXPOSE 8081
+
+CMD [ "/s3_service" ]

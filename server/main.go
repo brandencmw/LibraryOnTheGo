@@ -1,11 +1,17 @@
 package main
 
 import (
-	"LibraryOnTheGo/authors"
+	"libraryonthego/server/authors"
+	"libraryonthego/server/config"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+func init() {
+	config.LoadEnv()
+	config.DBInit()
+}
 
 func main() {
 	router := gin.Default()
