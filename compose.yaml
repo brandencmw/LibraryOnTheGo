@@ -31,5 +31,13 @@ services:
       - default
     ports:
       - "8081:8081"
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    networks:
+      - default
+    ports:
+      - "8082:80"
 volumes:
   data:
