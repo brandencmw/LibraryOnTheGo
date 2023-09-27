@@ -32,7 +32,7 @@ func LoginUser(c *gin.Context) {
 	//issue token for future requests
 	authToken := jwt.New(jwt.SigningMethodHS256)
 	claims := authToken.Claims.(jwt.MapClaims)
-	claims["username"] = requestBody.username
+	claims["user"] = requestBody.username
 	claims["exp"] = time.Now().Add(time.Hour * 1).Unix()
 
 	tokenString, err := authToken.SignedString(os.Getenv("JWT_SECRET"))
