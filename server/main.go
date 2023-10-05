@@ -8,12 +8,12 @@ import (
 	"libraryonthego/server/middleware"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/gin-gonic/gin"
 )
 
 func init() {
-	// config.LoadEnv()
 	config.DBInit()
 }
 
@@ -28,5 +28,9 @@ func main() {
 	router.POST("/auth", middleware.AuthMiddleware, authentication.ValidateUser)
 
 	routerAddress := fmt.Sprintf("0.0.0.0:%v", os.Getenv("SERVER_PORT"))
-	router.Run(routerAddress)
+
+	certFile := path.Join("./certificates", "cert.crt")
+	keyFile := path.Join("./certificates", "private.key")
+
+	http.ListenAndServeTLS(routerAddress, certFile, keyFile, router)
 }

@@ -1,5 +1,5 @@
 function userAuthorized() {
-    let url = "http://localhost:8080/auth"
+    let url = "https://localhost:8080/auth"
     console.log(document.cookie)
     return fetch(url, {
         method: "POST",

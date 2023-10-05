@@ -1,7 +1,7 @@
 function onSubmit(event) {
     event.preventDefault();
     const form = document.getElementById("loginForm");
-    const url = "http://localhost:8080/login";
+    const url = "https://localhost:8080/login";
     const username = form.elements["username"].value;
     const password = form.elements["password"].value;
 
@@ -12,9 +12,7 @@ function onSubmit(event) {
 
     fetch(url, {
         method: "POST",
-        headers: {
-            'Content-Type': "application/json"
-        },
+        credentials: "include",
         body: JSON.stringify(request)
     }).then(response => {
         console.log(response);
