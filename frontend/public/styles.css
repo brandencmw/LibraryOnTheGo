@@ -57,6 +57,13 @@ label {
     font-weight: 500;
 }
 
+form {
+    display: flex;
+    flex-direction: column;
+    width: 80%;
+    justify-content: center;
+}
+
 .content {
     width: 100%;
     flex-grow: 1;
@@ -65,14 +72,6 @@ label {
     justify-content: center;
     align-items: center;
 }
-
-.search-form {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    width: 80%;
-}
-
 
 .search-bar {
     display: flex;

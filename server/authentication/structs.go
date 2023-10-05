@@ -1,6 +1,6 @@
 package authentication
 
 type authRequestBody struct {
-	username string
-	password string
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }

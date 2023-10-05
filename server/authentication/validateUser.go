@@ -3,42 +3,27 @@ package authentication
 import (
 	"fmt"
 	"net/http"
-	"os"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt"
 )
 
 func ValidateUser(c *gin.Context) {
 
-	var authToken string
+	var httpStatus int
 
-	err := c.ShouldBindJSON(authToken)
+	authorized, exists := c.Get("authorized")
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Must provide token",
-		})
-	}
+	fmt.Printf("Authenticated: %v\n", authorized)
+	fmt.Printf("Exists: %v\n", exists)
 
-	token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
-		_, ok := token.Method.(*jwt.SigningMethodHMAC)
-		if !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Method.Alg())
-		}
-
-		return os.Getenv("JWT_SECRET"), nil
-	})
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		if time.Now().Unix() > claims["exp"].(int64) {
-			c.AbortWithStatus(http.StatusUnauthorized)
-		}
-
-		c.Set("message", "authorized")
-		c.Next()
+	if authorized == "true" {
+		httpStatus = http.StatusOK
 	} else {
-		c.AbortWithStatus(http.StatusUnauthorized)
+		httpStatus = http.StatusUnauthorized
 	}
+
+	c.JSON(httpStatus, gin.H{
+		"authenticated": authorized,
+		"exists":        exists,
+	})
 }

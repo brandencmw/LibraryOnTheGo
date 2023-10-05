@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"libraryonthego/server/authentication"
 	"libraryonthego/server/authors"
 	"libraryonthego/server/config"
+	"libraryonthego/server/middleware"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,10 +19,14 @@ func init() {
 
 func main() {
 	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
+
 	router.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "Ping pong") })
 	router.GET("/authors", authors.GetAuthors)
 
-	router.GET("/login", authentication.LoginUser)
+	router.POST("/login", authentication.LoginUser)
+	router.POST("/auth", middleware.AuthMiddleware, authentication.ValidateUser)
 
-	router.Run("0.0.0.0:8080")
+	routerAddress := fmt.Sprintf("0.0.0.0:%v", os.Getenv("SERVER_PORT"))
+	router.Run(routerAddress)
 }
