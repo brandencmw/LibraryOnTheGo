@@ -4,25 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="../constants.js"></script>
-    <script src="scripts.js"></script>
+    <script src="authorize.js"></script>
     <link rel="stylesheet" href="../styles.css">
     <title>Admin Panel</title>
 </head>
 <body>
     <div class="content">
         <h2>Create New Author</h2>
-        <form action="" method="post" id="addAuthorForm">
+        <form method="post" id="addAuthorForm" enctype="multipart/form-data">
             <label for="author-first-name">Author's First Name</label>
-            <input type="text" name="author-first-name" id="">
+            <input type="text" name="author-first-name" id="authorFirstNameInput">
 
             <label for="author-last-name">Author's Last Name</label>
-            <input type="text" name="author-last-name" id="">
+            <input type="text" name="author-last-name" id="authorLastNameInput">
 
             <label for="author-bio">Author's Bio</label>
-            <textarea name="author-bio" id="" cols="30" rows="10"></textarea>
+            <textarea name="author-bio" id="authorBioInput" cols="30" rows="10"></textarea>
 
             <label for="author-headshot">Upload Headshot</label>
-            <input type="file" name="author-headshot" id="">
+            <input type="file" name="author-headshot" id="authorHeadshotUpload">
             <button type="submit">Submit</button>
         </form>
 
@@ -31,5 +31,6 @@
         </form>
 
     </div>
+    <script src="send-data.js"></script>
 </body>
 </html>

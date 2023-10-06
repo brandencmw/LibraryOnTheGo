@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 	"libraryonthego/server/authentication"
-	"libraryonthego/server/authors"
-	"libraryonthego/server/config"
+	"libraryonthego/server/controllers"
 	"libraryonthego/server/middleware"
 	"net/http"
 	"os"
@@ -14,7 +13,7 @@ import (
 )
 
 func init() {
-	config.DBInit()
+	// config.DBInit()
 }
 
 func main() {
@@ -22,7 +21,8 @@ func main() {
 	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "Ping pong") })
-	router.GET("/authors", authors.GetAuthors)
+	// router.GET("/authors", controllers.GetAuthors)
+	router.POST("/authors/create", middleware.AuthMiddleware, controllers.AddAuthor)
 
 	router.POST("/login", authentication.LoginUser)
 	router.POST("/auth", middleware.AuthMiddleware, authentication.ValidateUser)
@@ -32,5 +32,8 @@ func main() {
 	certFile := path.Join("./certificates", "cert.crt")
 	keyFile := path.Join("./certificates", "private.key")
 
-	http.ListenAndServeTLS(routerAddress, certFile, keyFile, router)
+	err := http.ListenAndServeTLS(routerAddress, certFile, keyFile, router)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err.Error())
+	}
 }
