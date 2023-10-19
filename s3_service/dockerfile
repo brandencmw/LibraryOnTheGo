@@ -1,15 +1,19 @@
-FROM golang:1.19.2-bullseye
+FROM golang:latest
 
 RUN mkdir /app
 
 WORKDIR /app
 
-COPY . .
+COPY go.mod .
+
+COPY go.sum .
 
 RUN go mod download
 
+COPY . .
+
 RUN go build -o /s3_service
 
-EXPOSE 8081
+EXPOSE 443
 
 CMD [ "/s3_service" ]

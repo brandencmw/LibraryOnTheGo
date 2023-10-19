@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"libraryonthego/server/services"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,5 +33,7 @@ func AddAuthor(c *gin.Context) {
 	addAuthorRequest.Bio = c.PostForm("bio")
 
 	fmt.Printf("Author Data: %v\n", addAuthorRequest)
+
+	services.SendAuthorImageToS3(addAuthorRequest.Headshot)
 	c.JSON(http.StatusOK, addAuthorRequest)
 }

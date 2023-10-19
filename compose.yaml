@@ -1,6 +1,7 @@
-version: "2.19"
+version: "3.8"
 services:
   database:
+    container_name: database
     image: postgres
     restart: always
     env_file:
@@ -9,7 +10,9 @@ services:
       - "5432:5432"
     volumes:
       - data:/var/lib/postgresql/data
+
   server:
+    container_name: server
     build:
       context: ./server
       dockerfile: dockerfile
@@ -17,27 +20,26 @@ services:
       - .env
     depends_on:
       - database
-    networks:
-      - default
     ports:
-      - "8080:8080"
+      - "8080:443"
+
   s3:
+    container_name: s3_service
     build:
       context: ./s3_service
       dockerfile: dockerfile
     env_file:
       - .env
-    networks:
-      - default
     ports:
-      - "8081:8081"
+      - "8081:443"
+
   frontend:
+    container_name: frontend
     build:
       context: ./frontend
       dockerfile: dockerfile
-    networks:
-      - default
     ports:
       - "8082:80"
+
 volumes:
   data:

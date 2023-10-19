@@ -19,6 +19,12 @@
 
 # Go workspace file
 go.work
+go.work.sum
 
 #environment variable
 .env
+
+#certificates and keys
+**/certificates
+
+
