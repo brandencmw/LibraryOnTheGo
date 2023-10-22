@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"libraryonthego/server/authentication"
 	"libraryonthego/server/config"
@@ -14,31 +13,31 @@ import (
 
 func init() {
 	// config.DBInit()
-	config.LoadCertificates()
+	fmt.Println("INITIALIZING")
+	config.ConfigureTLS()
 }
 
 func main() {
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{config.ServerCert},
-		RootCAs:      config.CACertPool,
-	}
-
+	fmt.Println("HELLO THERE")
 	router := gin.Default()
-
+	fmt.Println("HELLO THERE")
 	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "Ping pong") })
 	router.POST("/authors/create", middleware.AuthMiddleware, controllers.AddAuthor)
-
 	router.POST("/login", authentication.LoginUser)
 	router.POST("/auth", middleware.AuthMiddleware, authentication.ValidateUser)
 
+	fmt.Printf("WHAT IS GOING ON?")
+
 	server := &http.Server{
 		Addr:      ":443",
-		TLSConfig: tlsConfig,
+		TLSConfig: config.ServerTLS,
 		Handler:   router,
 	}
+
+	fmt.Printf("Config: %v", server.TLSConfig)
+	fmt.Printf("Private key: %T", server.TLSConfig.Certificates[0].PrivateKey)
 
 	err := server.ListenAndServeTLS("", "")
 

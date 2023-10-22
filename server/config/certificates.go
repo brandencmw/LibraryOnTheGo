@@ -9,10 +9,10 @@ import (
 	"path"
 )
 
-func loadServerCertificate(certFileName, keyFileName string) (tls.Certificate, error) {
+func loadTLSCertificate(certFileSubPath, keyFileSubPath string) (tls.Certificate, error) {
 
-	serverCertFilePath := path.Join("./certificates", certFileName)
-	serverKeyFilePath := path.Join("./certificates", keyFileName)
+	serverCertFilePath := path.Join("./certificates", certFileSubPath)
+	serverKeyFilePath := path.Join("./certificates", keyFileSubPath)
 
 	return tls.LoadX509KeyPair(serverCertFilePath, serverKeyFilePath)
 }
@@ -29,7 +29,7 @@ func loadRootCACertPool(certFileName string) (*x509.CertPool, error) {
 	ok := rootCACertPool.AppendCertsFromPEM(rootCACertBytes)
 
 	if !ok {
-		return nil, errors.New("Could not append root cert to pool")
+		return nil, errors.New("Could not append cert to pool")
 	}
 
 	return rootCACertPool, nil

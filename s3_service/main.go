@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"s3/config"
@@ -12,49 +11,10 @@ import (
 )
 
 func init() {
-	config.LoadCertificates()
+	config.ConfigureServerTLS()
 }
 
 func main() {
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{config.ServerCert},
-		RootCAs:      config.CACertPool,
-		// ClientCAs:    config.CACertPool,
-		// ClientAuth:   tls.RequireAndVerifyClientCert,
-		MaxVersion: tls.VersionTLS12,
-		MinVersion: tls.VersionTLS12,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		},
-		GetConfigForClient: func(chi *tls.ClientHelloInfo) (*tls.Config, error) {
-			for _, suite := range chi.CipherSuites {
-				fmt.Println(tls.CipherSuiteName(suite))
-			}
-
-			for _, version := range chi.SupportedVersions {
-				fmt.Println(tls.VersionName(version))
-			}
-
-			return nil, nil
-		},
-	}
-
-	fmt.Print("Cipher suites: ")
-	for _, suite := range tlsConfig.CipherSuites {
-		fmt.Println(tls.CipherSuiteName(suite))
-	}
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
@@ -66,9 +26,11 @@ func main() {
 
 	server := &http.Server{
 		Addr:      ":443",
-		TLSConfig: tlsConfig,
+		TLSConfig: config.ServerTLS,
 		Handler:   router,
 	}
+
+	fmt.Printf("Private key: %T", server.TLSConfig.Certificates[0].PrivateKey)
 
 	err := server.ListenAndServeTLS("", "")
 
