@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"libraryonthego/server/authentication"
 	"libraryonthego/server/config"
-	"libraryonthego/server/controllers"
 	"libraryonthego/server/middleware"
+	"libraryonthego/server/routes"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,22 +12,14 @@ import (
 
 func init() {
 	// config.DBInit()
-	fmt.Println("INITIALIZING")
 	config.ConfigureTLS()
 }
 
 func main() {
-	fmt.Println("HELLO THERE")
 	router := gin.Default()
-	fmt.Println("HELLO THERE")
 	router.Use(middleware.CORSMiddleware())
-
-	router.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "Ping pong") })
-	router.POST("/authors/create", middleware.AuthMiddleware, controllers.AddAuthor)
-	router.POST("/login", authentication.LoginUser)
-	router.POST("/auth", middleware.AuthMiddleware, authentication.ValidateUser)
-
-	fmt.Printf("WHAT IS GOING ON?")
+	routes.AttachAuthorRoutes(router)
+	routes.AttachAuthorizationRoutes(router)
 
 	server := &http.Server{
 		Addr:      ":443",

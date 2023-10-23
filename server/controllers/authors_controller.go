@@ -37,3 +37,19 @@ func AddAuthor(c *gin.Context) {
 	services.SendAuthorImageToS3(addAuthorRequest.Headshot)
 	c.JSON(http.StatusOK, addAuthorRequest)
 }
+
+func GetAuthor(c *gin.Context) {
+	c.String(http.StatusOK, "Get single author")
+}
+
+func GetAllAuthors(c *gin.Context) {
+	c.String(http.StatusOK, "Get all authors")
+}
+
+func DeleteAuthor(c *gin.Context) {
+	c.String(http.StatusOK, "Delete an author")
+}
+
+func UpdateAuthor(c *gin.Context) {
+	c.String(http.StatusOK, "Update author info")
+}
