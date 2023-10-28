@@ -3,34 +3,51 @@ package config
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"os"
 	"path"
 )
 
-func loadTLSCertificate(certFileSubPath, keyFileSubPath string) (tls.Certificate, error) {
-
-	serverCertFilePath := path.Join("./certificates", certFileSubPath)
-	serverKeyFilePath := path.Join("./certificates", keyFileSubPath)
-
-	return tls.LoadX509KeyPair(serverCertFilePath, serverKeyFilePath)
+type X509CertificateProvider interface {
+	LoadX509KeyPair(string, string) (tls.Certificate, error)
+	LoadX509CertPool([]string) (*x509.CertPool, error)
 }
 
-func loadRootCACertPool(certFileName string) (*x509.CertPool, error) {
-	rootCACertFilePath := path.Join("./certificates", certFileName)
+type TLSCertificateProvider struct {
+	certificatePath string
+}
 
-	rootCACertBytes, err := os.ReadFile(rootCACertFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("Error reading Root CA Cert file: %v\n", err.Error())
+func NewTLSCertificateProvider(basePath string) *TLSCertificateProvider {
+	if basePath == "" {
+		basePath = "./"
+	}
+	return &TLSCertificateProvider{
+		certificatePath: basePath,
+	}
+}
+
+func (c *TLSCertificateProvider) LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
+	certFilePath := path.Join(c.certificatePath, certFile)
+	keyFilePath := path.Join(c.certificatePath, keyFile)
+
+	return tls.LoadX509KeyPair(certFilePath, keyFilePath)
+}
+
+func (c *TLSCertificateProvider) LoadX509CertPool(certFileNames []string) (*x509.CertPool, error) {
+
+	certPool := x509.NewCertPool()
+	for _, fileName := range certFileNames {
+		certFilePath := path.Join(c.certificatePath, fileName)
+		certFileBytes, err := os.ReadFile(certFilePath)
+		if err != nil {
+			return certPool, fmt.Errorf("Error reading %v: %v", certFilePath, err.Error())
+		}
+
+		ok := certPool.AppendCertsFromPEM(certFileBytes)
+		if !ok {
+			return certPool, fmt.Errorf("Failed to append %v to pool", certFilePath)
+		}
 	}
 
-	rootCACertPool := x509.NewCertPool()
-	ok := rootCACertPool.AppendCertsFromPEM(rootCACertBytes)
-
-	if !ok {
-		return nil, errors.New("Could not append cert to pool")
-	}
-
-	return rootCACertPool, nil
+	return certPool, nil
 }

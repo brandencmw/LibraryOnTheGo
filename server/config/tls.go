@@ -2,64 +2,44 @@ package config
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"fmt"
 )
 
-var (
-	ServerTLS  *tls.Config
-	ClientTLS  *tls.Config
-	rootCAPool *x509.CertPool
-)
-
-func ConfigureTLS() {
-	rootCAPool, err := loadRootCACertPool("root-ca.crt")
-	if err != nil {
-		fmt.Printf(err.Error())
-		return
-	}
-
-	ServerTLS, err = configureServerTLS(rootCAPool)
-	if err != nil {
-		fmt.Printf(err.Error())
-		return
-	}
-
-	ClientTLS, err = configureClientTLS(rootCAPool)
-	if err != nil {
-		fmt.Printf(err.Error())
-		return
-	}
-
+type TLSConfigProvider interface {
+	GetTLSConfig() (*tls.Config, error)
 }
 
-func configureServerTLS(rootCAPool *x509.CertPool) (*tls.Config, error) {
-
-	serverCert, err := loadTLSCertificate("server/backend-server.crt", "server/backend-server.key")
-	if err != nil {
-		return nil, fmt.Errorf("Error loading server certificate: %s", err.Error())
-	}
-
-	serverTLS := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		RootCAs:      rootCAPool,
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	return serverTLS, nil
+type TLS13ConfigProvider struct {
+	tlsCertificateProvider TLSCertificateProvider
+	leafCertFile           string
+	leafCertKeyFile        string
+	rootCAFiles            []string
 }
 
-func configureClientTLS(rootCAPool *x509.CertPool) (*tls.Config, error) {
-	clientCert, err := loadTLSCertificate("client/backend-client.crt", "client/backend-client.key")
+func NewTLS13ConfigProvider(basePath, leafCertFile, leafCertKeyFile string, rootCAFiles []string) *TLS13ConfigProvider {
+	return &TLS13ConfigProvider{
+		tlsCertificateProvider: *NewTLSCertificateProvider(basePath),
+		leafCertFile:           leafCertFile,
+		leafCertKeyFile:        leafCertKeyFile,
+		rootCAFiles:            rootCAFiles,
+	}
+}
+
+func (t *TLS13ConfigProvider) GetTLSConfig() (*tls.Config, error) {
+
+	leafCertificate, err := t.tlsCertificateProvider.LoadX509KeyPair(t.leafCertFile, t.leafCertKeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("Error loading client certificate: %s", err.Error())
+		return nil, err
 	}
 
-	clientTLS := &tls.Config{
-		Certificates: []tls.Certificate{clientCert},
-		RootCAs:      rootCAPool,
+	rootCACertPool, err := t.tlsCertificateProvider.LoadX509CertPool(t.rootCAFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{leafCertificate},
+		RootCAs:      rootCACertPool,
 		MinVersion:   tls.VersionTLS13,
-	}
-
-	return clientTLS, nil
+		MaxVersion:   tls.VersionTLS13,
+	}, nil
 }

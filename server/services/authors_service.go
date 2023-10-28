@@ -7,10 +7,10 @@ import (
 	"net/http"
 )
 
-func SendAuthorImageToS3(imageBytes []byte) string {
+func SendAuthorImageToS3(imageBytes []byte) error {
 
 	requestBody := []byte(fmt.Sprintf(`{
-		"imageData": "%v"
+		"headshot": "%v"
 	}`, imageBytes))
 
 	bodyReader := bytes.NewReader(requestBody)
@@ -20,9 +20,20 @@ func SendAuthorImageToS3(imageBytes []byte) string {
 		fmt.Printf("Error creating request: %v\n", err.Error())
 	}
 
+	tlsConfigProvider := config.NewTLS13ConfigProvider(
+		"./certificates",
+		"client/backend-client.crt",
+		"client/backend-client.key",
+		[]string{"root-ca.crt"},
+	)
+	tlsConfig, err := tlsConfigProvider.GetTLSConfig()
+	if err != nil {
+		return err
+	}
+
 	client := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: config.ClientTLS,
+			TLSClientConfig: tlsConfig,
 		},
 	}
 
@@ -32,7 +43,7 @@ func SendAuthorImageToS3(imageBytes []byte) string {
 	}
 
 	fmt.Printf("Status: %v\n", res.Status)
-	return ""
+	return nil
 }
 
 func UploadAuthorInfoToDB() {
