@@ -1,41 +1,53 @@
 package main
 
 import (
-	"fmt"
+	"crypto/tls"
+	"log"
 	"net/http"
+	"path"
 	"s3/config"
-	"s3/controllers"
 	"s3/middleware"
+	"s3/routes"
 
 	"github.com/gin-gonic/gin"
 )
 
-func init() {
-	config.ConfigureServerTLS()
+func setupRouter() *gin.Engine {
+	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
+	routes.AttachAuthorRoutes(router)
+	return router
+}
+
+func setupTLS() (*tls.Config, error) {
+	const rootCertFolder = "certificates"
+	tlsConfigProvider := config.NewMutualTLS13ConfigProvider(
+		path.Join(rootCertFolder, "s3-server.crt"),
+		path.Join(rootCertFolder, "s3-server.key"),
+		[]string{path.Join(rootCertFolder, "root-ca.crt")},
+	)
+	return tlsConfigProvider.GetTLSConfig()
+}
+
+func createServer(address string, tls *tls.Config, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:      address,
+		TLSConfig: tls,
+		Handler:   handler,
+	}
 }
 
 func main() {
 
-	router := gin.Default()
-	router.Use(middleware.CORSMiddleware())
-
-	router.POST("/add-author-image", controllers.UploadAuthorImage)
-	router.POST("/add-book-image")
-	router.GET("/get-author-image/:object-key")
-	router.GET("/get-book-image/:object-key")
-
-	server := &http.Server{
-		Addr:      ":443",
-		TLSConfig: config.ServerTLS,
-		Handler:   router,
+	router := setupRouter()
+	tlsConfig, err := setupTLS()
+	if err != nil {
+		log.Fatalf("Failed to configure TLS: %v\n", err.Error())
 	}
 
-	fmt.Printf("Private key: %T", server.TLSConfig.Certificates[0].PrivateKey)
-
-	err := server.ListenAndServeTLS("", "")
-
+	server := createServer(":443", tlsConfig, router)
+	err = server.ListenAndServeTLS("", "")
 	if err != nil {
-		fmt.Printf("%v", err.Error())
-		panic("Server failed to start")
+		log.Fatalf("Failed to start server: %v\n", err.Error())
 	}
 }

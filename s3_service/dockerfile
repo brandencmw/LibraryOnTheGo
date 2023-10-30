@@ -12,6 +12,9 @@ RUN go mod download
 
 COPY . .
 
+ENV AWS_CONFIG_FILE=/app/.aws/config
+ENV PATH="/app/.aws:$PATH"
+
 RUN go build -o /s3_service
 
 EXPOSE 443

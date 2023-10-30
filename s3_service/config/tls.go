@@ -2,31 +2,46 @@ package config
 
 import (
 	"crypto/tls"
-	"fmt"
 )
 
-var ServerTLS *tls.Config
+type TLSConfigProvider interface {
+	GetTLSConfig() (*tls.Config, error)
+}
 
-func ConfigureServerTLS() {
+type MutualTLS13ConfigProvider struct {
+	certProvider    X509CertificateProvider
+	leafCertFile    string
+	leafCertKeyFile string
+	rootCAFiles     []string
+}
 
-	serverCert, err := loadServerCertificate("s3-server.crt", "s3-server.key")
+func NewMutualTLS13ConfigProvider(leafCertFile, leafCertKeyFile string, rootCAFiles []string) *MutualTLS13ConfigProvider {
+	return &MutualTLS13ConfigProvider{
+		certProvider:    &TLSCertificateProvider{},
+		leafCertFile:    leafCertFile,
+		leafCertKeyFile: leafCertKeyFile,
+		rootCAFiles:     rootCAFiles,
+	}
+}
+
+func (m *MutualTLS13ConfigProvider) GetTLSConfig() (*tls.Config, error) {
+
+	leafCertificate, err := m.certProvider.LoadX509KeyPair(m.leafCertFile, m.leafCertKeyFile)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return nil, err
 	}
 
-	rootCAPool, err := loadRootCACertPool("root-ca.crt")
+	rootCACertPool, err := m.certProvider.LoadX509CertPool(m.rootCAFiles)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return nil, err
 	}
 
-	ServerTLS = &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		RootCAs:      rootCAPool,
-		MinVersion:   tls.VersionTLS13,
+	return &tls.Config{
+		Certificates: []tls.Certificate{leafCertificate},
+		RootCAs:      rootCACertPool,
+		ClientCAs:    rootCACertPool,
 		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    rootCAPool,
-	}
-
+		MinVersion:   tls.VersionTLS13,
+		MaxVersion:   tls.VersionTLS13,
+	}, nil
 }
