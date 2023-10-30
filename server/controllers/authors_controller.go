@@ -1,22 +1,22 @@
 package controllers
 
 import (
-	"fmt"
+	"errors"
 	"libraryonthego/server/services"
+	"mime/multipart"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AddAuthor(c *gin.Context) {
+func readFormFile(fileHeader *multipart.FileHeader) (fileBytes []byte, err error) {
 
-	var addAuthorRequest addAuthorRequest
+	file, err := fileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
 
-	c.Request.ParseMultipartForm(1000000)
-	fileHeader, _ := c.FormFile("headshot")
-	file, _ := fileHeader.Open()
-
-	fileBytes := make([]byte, 0)
+	fileBytes = make([]byte, 0)
 	for {
 		buffer := make([]byte, 1024)
 		n, err := file.Read(buffer)
@@ -27,14 +27,31 @@ func AddAuthor(c *gin.Context) {
 	}
 	file.Close()
 
-	addAuthorRequest.Headshot = fileBytes
-	addAuthorRequest.FirstName = c.PostForm("firstName")
-	addAuthorRequest.LastName = c.PostForm("lastName")
-	addAuthorRequest.Bio = c.PostForm("bio")
+	return fileBytes, err
+}
 
-	fmt.Printf("Author Data: %v\n", addAuthorRequest)
+func AddAuthor(c *gin.Context) {
 
-	services.SendAuthorImageToS3(addAuthorRequest.Headshot)
+	var addAuthorRequest addAuthorRequest
+
+	err := c.ShouldBind(&addAuthorRequest)
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Invalid request format"))
+		return
+	}
+
+	headshotContents, err := readFormFile(addAuthorRequest.Headshot)
+	authorsService := services.DefaultAuthorsService{}
+	err = authorsService.AddAuthor(services.AuthorInfo{
+		Headshot:  headshotContents,
+		FirstName: addAuthorRequest.FirstName,
+		LastName:  addAuthorRequest.LastName,
+		Bio:       addAuthorRequest.Bio,
+	})
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+
 	c.JSON(http.StatusOK, addAuthorRequest)
 }
 

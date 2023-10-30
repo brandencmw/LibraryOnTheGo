@@ -2,31 +2,80 @@ package services
 
 import (
 	"bytes"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"libraryonthego/server/config"
 	"net/http"
+	"path"
 )
 
-func SendAuthorImageToS3(imageBytes []byte) error {
+type AuthorInfo struct {
+	Headshot  []byte
+	FirstName string
+	LastName  string
+	Bio       string
+}
 
-	requestBody := []byte(fmt.Sprintf(`{
-		"headshot": "%v"
-	}`, imageBytes))
+type AuthorsService interface {
+	AddAuthor(AuthorInfo) error
+}
 
-	bodyReader := bytes.NewReader(requestBody)
+type DefaultAuthorsService struct{}
 
-	req, err := http.NewRequest(http.MethodPost, "https://s3_service/add-author-image", bodyReader)
+func (s *DefaultAuthorsService) AddAuthor(author AuthorInfo) error {
+	err := uploadAuthorImage(author.Headshot)
 	if err != nil {
-		fmt.Printf("Error creating request: %v\n", err.Error())
+		return err
 	}
 
+	err = uploadAuthorInfo(author.FirstName, author.LastName, author.Bio)
+	return err
+}
+
+func createS3RequestBody(image []byte) (*bytes.Reader, error) {
+
+	reqBody := uploadToS3Request{
+		Image: image,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.NewReader(jsonBody), nil
+
+}
+
+func getTLSConfig() (*tls.Config, error) {
+	const rootCertFolder = "certificates"
+	const clientCertFolder = "client"
 	tlsConfigProvider := config.NewTLS13ConfigProvider(
-		"./certificates",
-		"client/backend-client.crt",
-		"client/backend-client.key",
-		[]string{"root-ca.crt"},
+		path.Join(rootCertFolder, clientCertFolder, "backend-client.crt"),
+		path.Join(rootCertFolder, clientCertFolder, "backend-client.key"),
+		[]string{path.Join(rootCertFolder, "root-ca.crt")},
 	)
-	tlsConfig, err := tlsConfigProvider.GetTLSConfig()
+	return tlsConfigProvider.GetTLSConfig()
+}
+
+type uploadToS3Request struct {
+	Image []byte `json:"image"`
+}
+
+func uploadAuthorImage(imageBytes []byte) error {
+
+	body, err := createS3RequestBody(imageBytes)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://s3_service/authors/add-author-image", body)
+	if err != nil {
+		return err
+	}
+
+	tlsConfig, err := getTLSConfig()
 	if err != nil {
 		return err
 	}
@@ -39,13 +88,13 @@ func SendAuthorImageToS3(imageBytes []byte) error {
 
 	res, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error with request: %v\n", err.Error())
+		return fmt.Errorf("Error with request: %v", err.Error())
 	}
 
 	fmt.Printf("Status: %v\n", res.Status)
 	return nil
 }
 
-func UploadAuthorInfoToDB() {
-
+func uploadAuthorInfo(firstName, lastName, bio string) error {
+	return nil
 }

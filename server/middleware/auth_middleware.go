@@ -12,8 +12,7 @@ import (
 
 func AuthMiddleware(c *gin.Context) {
 	authToken, err := c.Cookie("Authorization")
-	fmt.Printf("Cookie:%v\n", authToken)
-	
+
 	if err != nil {
 		c.AbortWithError(http.StatusUnauthorized, fmt.Errorf("Cookie:%v", authToken))
 		return
@@ -27,7 +26,6 @@ func AuthMiddleware(c *gin.Context) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
 
-	fmt.Printf("Valid: %v\n", token.Valid)
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 
 		if float64(time.Now().Unix()) > claims["exp"].(float64) {

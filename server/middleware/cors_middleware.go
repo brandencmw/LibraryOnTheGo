@@ -4,7 +4,6 @@ import "github.com/gin-gonic/gin"
 
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Content-Type", "application/json")
 
 		// Set Access-Control-Allow-Origin header based on request origin
 		origin := c.Request.Header.Get("Origin")

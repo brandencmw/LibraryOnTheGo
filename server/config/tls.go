@@ -9,29 +9,29 @@ type TLSConfigProvider interface {
 }
 
 type TLS13ConfigProvider struct {
-	tlsCertificateProvider TLSCertificateProvider
-	leafCertFile           string
-	leafCertKeyFile        string
-	rootCAFiles            []string
+	certProvider    X509CertificateProvider
+	leafCertFile    string
+	leafCertKeyFile string
+	rootCAFiles     []string
 }
 
-func NewTLS13ConfigProvider(basePath, leafCertFile, leafCertKeyFile string, rootCAFiles []string) *TLS13ConfigProvider {
+func NewTLS13ConfigProvider(leafCertFile, leafCertKeyFile string, rootCAFiles []string) *TLS13ConfigProvider {
 	return &TLS13ConfigProvider{
-		tlsCertificateProvider: *NewTLSCertificateProvider(basePath),
-		leafCertFile:           leafCertFile,
-		leafCertKeyFile:        leafCertKeyFile,
-		rootCAFiles:            rootCAFiles,
+		certProvider:    &TLSCertificateProvider{},
+		leafCertFile:    leafCertFile,
+		leafCertKeyFile: leafCertKeyFile,
+		rootCAFiles:     rootCAFiles,
 	}
 }
 
 func (t *TLS13ConfigProvider) GetTLSConfig() (*tls.Config, error) {
 
-	leafCertificate, err := t.tlsCertificateProvider.LoadX509KeyPair(t.leafCertFile, t.leafCertKeyFile)
+	leafCertificate, err := t.certProvider.LoadX509KeyPair(t.leafCertFile, t.leafCertKeyFile)
 	if err != nil {
 		return nil, err
 	}
 
-	rootCACertPool, err := t.tlsCertificateProvider.LoadX509CertPool(t.rootCAFiles)
+	rootCACertPool, err := t.certProvider.LoadX509CertPool(t.rootCAFiles)
 	if err != nil {
 		return nil, err
 	}

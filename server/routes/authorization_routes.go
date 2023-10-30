@@ -11,6 +11,6 @@ func AttachAuthorizationRoutes(router *gin.Engine) {
 	authGroup := router.Group("/auth")
 	{
 		authGroup.POST("/login", authentication.LoginUser)
-		authGroup.POST("/", middleware.AuthMiddleware)
+		authGroup.POST("/", middleware.AuthMiddleware, authentication.ValidateUser)
 	}
 }
