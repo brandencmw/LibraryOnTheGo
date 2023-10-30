@@ -22,9 +22,10 @@ go.work
 go.work.sum
 
 #environment variable
-.env
+*.env
 
 #certificates and keys
 **/certificates
 
+**/aws/*
 
