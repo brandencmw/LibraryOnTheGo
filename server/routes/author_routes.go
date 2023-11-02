@@ -7,17 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AttachAuthorRoutes(router *gin.Engine) {
+func AttachAuthorRoutes(router *gin.Engine, controller *controllers.AuthorsController) {
 	authorGroup := router.Group("/authors")
 	{
-		authorGroup.GET("/", controllers.GetAllAuthors)
-		authorGroup.GET("/:authorID", controllers.GetAuthor)
+		authorGroup.GET("/", controller.GetAllAuthors)
+		authorGroup.GET("/:authorID", controller.GetAuthor)
 	}
 
 	protectedAuthorGroup := authorGroup.Group("/auth")
 	{
-		protectedAuthorGroup.POST("/create", middleware.AuthMiddleware, controllers.AddAuthor)
-		protectedAuthorGroup.DELETE("/delete/:authorID", middleware.AuthMiddleware, controllers.DeleteAuthor)
-		protectedAuthorGroup.PUT("/update", middleware.AuthMiddleware, controllers.UpdateAuthor)
+		protectedAuthorGroup.POST("/create", middleware.AuthMiddleware, controller.AddAuthor)
+		protectedAuthorGroup.DELETE("/delete/:authorID", middleware.AuthMiddleware, controller.DeleteAuthor)
+		protectedAuthorGroup.PUT("/update", middleware.AuthMiddleware, controller.UpdateAuthor)
 	}
 }
