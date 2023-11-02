@@ -2,7 +2,7 @@ package services
 
 import (
 	"fmt"
-	"libraryonthego/server/repositories"
+	"libraryonthego/server/data"
 	"libraryonthego/server/utils"
 	"mime/multipart"
 )
@@ -15,10 +15,10 @@ type AddAuthorInfo struct {
 }
 
 type AuthorsService struct {
-	ImageRepo repositories.ImageRepository
+	ImageRepo data.ImageRepository
 }
 
-func NewAuthorsService(imageRepo repositories.ImageRepository) *AuthorsService {
+func NewAuthorsService(imageRepo data.ImageRepository) *AuthorsService {
 	return &AuthorsService{
 		ImageRepo: imageRepo,
 	}

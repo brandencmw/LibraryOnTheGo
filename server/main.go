@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"libraryonthego/server/config"
 	"libraryonthego/server/controllers"
+	"libraryonthego/server/data"
 	"libraryonthego/server/middleware"
-	"libraryonthego/server/repositories"
 	"libraryonthego/server/routes"
 	"libraryonthego/server/services"
 	"log"
@@ -17,7 +17,7 @@ import (
 func createAuthorController(client *http.Client) *controllers.AuthorsController {
 	return controllers.NewAuthorsController(
 		services.NewAuthorsService(
-			repositories.NewS3ImageRepository(client, "https://s3_service"),
+			data.NewS3ImageRepository(client, "https://s3_service/authors"),
 		),
 	)
 }
@@ -52,7 +52,7 @@ func setupServerTLS() (*tls.Config, error) {
 func setupClientTLS() (*tls.Config, error) {
 	rootCACertFiles := []string{"./certificates/root-ca.crt"}
 	certToKeyMap := map[string]string{
-		"./certificates/server/backend-client.crt": "./certificates/server/backend-client.key",
+		"./certificates/client/backend-client.crt": "./certificates/client/backend-client.key",
 	}
 	certProvider := &config.LocalCertificateProvider{
 		RootCACertFiles: rootCACertFiles,
@@ -84,6 +84,7 @@ func createServer(addr string, tls *tls.Config, handler http.Handler) *http.Serv
 }
 
 func main() {
+
 	httpClient, err := createClient()
 	if err != nil {
 		log.Fatalf("Failed to create http client: %v", err.Error())

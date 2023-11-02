@@ -1,4 +1,4 @@
-package repositories
+package data
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 )
 
 type ImageRepository interface {
@@ -38,7 +37,7 @@ func (r *S3ImageRepository) AddImage(imageName string, image []byte) error {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, path.Join(r.basePath, "authors/add-author-image"), body)
+	req, err := http.NewRequest(http.MethodPost, r.basePath+"/add-author-image", body)
 	if err != nil {
 		return err
 	}
