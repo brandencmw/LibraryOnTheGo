@@ -2,46 +2,69 @@ package config
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 )
 
-type TLSConfigProvider interface {
-	GetTLSConfig() (*tls.Config, error)
+type tlsOptionFunction func(*tls.Config) error
+
+type TLSBuilder struct {
+	CertProvider CertificateProvider
 }
 
-type MutualTLS13ConfigProvider struct {
-	certProvider    X509CertificateProvider
-	leafCertFile    string
-	leafCertKeyFile string
-	rootCAFiles     []string
-}
-
-func NewMutualTLS13ConfigProvider(leafCertFile, leafCertKeyFile string, rootCAFiles []string) *MutualTLS13ConfigProvider {
-	return &MutualTLS13ConfigProvider{
-		certProvider:    &TLSCertificateProvider{},
-		leafCertFile:    leafCertFile,
-		leafCertKeyFile: leafCertKeyFile,
-		rootCAFiles:     rootCAFiles,
+func UseTLSVersion(version uint16) tlsOptionFunction {
+	return func(config *tls.Config) error {
+		if version < tls.VersionTLS10 || version > tls.VersionTLS13 {
+			return errors.New("Invalid or unsafe TLS/SSL version provided")
+		}
+		config.MinVersion = version
+		config.MaxVersion = version
+		return nil
 	}
 }
 
-func (m *MutualTLS13ConfigProvider) GetTLSConfig() (*tls.Config, error) {
+func UseMutualTLS(config *tls.Config) error {
+	config.ClientCAs = config.RootCAs
+	config.ClientAuth = tls.RequireAndVerifyClientCert
+	return nil
+}
 
-	leafCertificate, err := m.certProvider.LoadX509KeyPair(m.leafCertFile, m.leafCertKeyFile)
+func withRootCA(rootCACertPool *x509.CertPool) tlsOptionFunction {
+	return func(config *tls.Config) error {
+		config.RootCAs = rootCACertPool
+		return nil
+	}
+}
+
+func withCertificiates(certs []tls.Certificate) tlsOptionFunction {
+	return func(config *tls.Config) error {
+		config.Certificates = certs
+		return nil
+	}
+}
+
+func defaultTLSConfig() *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12}
+}
+
+func (b *TLSBuilder) BuildTLS(tlsOptions ...tlsOptionFunction) (*tls.Config, error) {
+	tlsConfig := defaultTLSConfig()
+	certs, err := b.CertProvider.LoadServerCertificates()
 	if err != nil {
 		return nil, err
 	}
+	withCertificiates(certs)(tlsConfig)
 
-	rootCACertPool, err := m.certProvider.LoadX509CertPool(m.rootCAFiles)
+	rootCertPool, err := b.CertProvider.LoadRootCertificatePool()
 	if err != nil {
 		return nil, err
 	}
+	withRootCA(rootCertPool)(tlsConfig)
 
-	return &tls.Config{
-		Certificates: []tls.Certificate{leafCertificate},
-		RootCAs:      rootCACertPool,
-		ClientCAs:    rootCACertPool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-	}, nil
+	for _, function := range tlsOptions {
+		if err := function(tlsConfig); err != nil {
+			return nil, err
+		}
+	}
+	return tlsConfig, nil
 }

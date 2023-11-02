@@ -1,5 +1,6 @@
 package controllers
 
-type uploadAuthorImageRequest struct {
-	Headshot []byte `json:"image" binding:"required"`
+type uploadImageRequest struct {
+	Image     []byte `json:"image" binding:"required"`
+	ImageName string `json:"imageName" binding:"required"`
 }

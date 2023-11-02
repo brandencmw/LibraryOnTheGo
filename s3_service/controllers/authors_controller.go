@@ -8,23 +8,35 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func UploadAuthorImage(c *gin.Context) {
+type AuthorsController struct {
+	Service *services.LibraryBucketService
+}
 
-	var request uploadAuthorImageRequest
+func NewAuthorsControlller(service *services.LibraryBucketService) *AuthorsController {
+	return &AuthorsController{
+		Service: service,
+	}
+}
 
-	err := c.ShouldBindJSON(&request)
+func (c *AuthorsController) UploadAuthorImage(ctx *gin.Context) {
+	var request uploadImageRequest
+
+	err := ctx.ShouldBindJSON(&request)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("Error binding request data: %v", err.Error()))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect request format", "uploaded": false})
+		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Error binding request data: %v", err.Error()))
 		return
 	}
 
-	err = services.UploadAuthorImageToS3Bucket(request.Headshot)
+	err = c.Service.UploadImage(request.ImageName, request.Image)
 	if err != nil {
-		fmt.Printf("ERROR: %v\n", err.Error())
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload image", "uploaded": false})
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to upload author image: %v", err.Error()))
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
+	ctx.JSON(http.StatusOK, gin.H{
+		"uploaded": true,
 	})
 }
 

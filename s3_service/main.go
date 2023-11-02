@@ -4,29 +4,46 @@ import (
 	"crypto/tls"
 	"log"
 	"net/http"
-	"path"
 	"s3/config"
+	"s3/controllers"
+	"s3/data"
 	"s3/middleware"
 	"s3/routes"
+	"s3/services"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 )
 
-func setupRouter() *gin.Engine {
+func setupAuthorsController(client *s3.Client) *controllers.AuthorsController {
+	return controllers.NewAuthorsControlller(
+		services.NewLibraryBucketService("authors", client),
+	)
+}
+
+func setupAuthorRoutes(router *gin.Engine, client *s3.Client) {
+	controller := setupAuthorsController(client)
+	routes.AttachAuthorRoutes(router, controller)
+}
+
+func setupRouter(client *s3.Client) *gin.Engine {
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
-	routes.AttachAuthorRoutes(router)
+	setupAuthorRoutes(router, client)
 	return router
 }
 
-func setupTLS() (*tls.Config, error) {
-	const rootCertFolder = "certificates"
-	tlsConfigProvider := config.NewMutualTLS13ConfigProvider(
-		path.Join(rootCertFolder, "s3-server.crt"),
-		path.Join(rootCertFolder, "s3-server.key"),
-		[]string{path.Join(rootCertFolder, "root-ca.crt")},
-	)
-	return tlsConfigProvider.GetTLSConfig()
+func setupServerTLS() (*tls.Config, error) {
+	rootCACertFiles := []string{"./certificates/root-ca.crt"}
+	certToKeyMap := map[string]string{"./certificates/s3-server.crt": "./certificates/s3-server.key"}
+
+	certProvider := &config.LocalCertificateProvider{
+		RootCACertFiles: rootCACertFiles,
+		CertToKeyMap:    certToKeyMap,
+	}
+
+	tlsConfigBuilder := config.TLSBuilder{CertProvider: certProvider}
+	return tlsConfigBuilder.BuildTLS(config.UseTLSVersion(tls.VersionTLS13), config.UseMutualTLS)
 }
 
 func createServer(address string, tls *tls.Config, handler http.Handler) *http.Server {
@@ -38,14 +55,19 @@ func createServer(address string, tls *tls.Config, handler http.Handler) *http.S
 }
 
 func main() {
+	s3Client, err := data.CreateS3Client()
+	if err != nil {
+		log.Fatalf("Failed to connect to S3: %v\n", err.Error())
+	}
 
-	router := setupRouter()
-	tlsConfig, err := setupTLS()
+	router := setupRouter(s3Client)
+
+	serverTLS, err := setupServerTLS()
 	if err != nil {
 		log.Fatalf("Failed to configure TLS: %v\n", err.Error())
 	}
 
-	server := createServer(":443", tlsConfig, router)
+	server := createServer(":443", serverTLS, router)
 	err = server.ListenAndServeTLS("", "")
 	if err != nil {
 		log.Fatalf("Failed to start server: %v\n", err.Error())

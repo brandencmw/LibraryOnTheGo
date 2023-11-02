@@ -1,49 +1,46 @@
 package services
 
 import (
+	"bytes"
 	"context"
-	"fmt"
-	"os"
+	"path"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func UploadAuthorImageToS3Bucket(headshot []byte) error {
-	var configProfile string
+type LibraryBucketService struct {
+	Directory string
+	Client    *s3.Client
+}
 
-	switch os.Getenv("ENVIRONMENT") {
-	case "local":
-		configProfile = "default"
-	case "docker":
-		configProfile = "docker"
+func NewLibraryBucketService(directory string, client *s3.Client) *LibraryBucketService {
+	return &LibraryBucketService{
+		Directory: directory,
+		Client:    client,
 	}
+}
 
-	cfg, err := config.LoadDefaultConfig(
-		context.TODO(),
-		config.WithRegion("us-east-1"),
-		config.WithSharedConfigProfile(configProfile),
-	)
+func (s *LibraryBucketService) UploadImage(imageName string, image []byte) error {
 
-	if err != nil {
-		fmt.Printf("Error: %v", err.Error())
-		return err
-	}
+	bucketName := "library-pictures"
+	imageKey := path.Join(s.Directory, imageName)
+	_, err := s.Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: &bucketName,
+		Key:    &imageKey,
+		Body:   bytes.NewReader(image),
+	})
 
-	creds, err := cfg.Credentials.Retrieve(context.TODO())
-	if err != nil {
-		fmt.Printf("Error: %v", err.Error())
-		return err
-	}
-	fmt.Printf("Access key ID: %v\n", creds.AccessKeyID)
-	client := s3.NewFromConfig(cfg)
+	return err
+}
 
-	output, err := client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
-	// output, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-	// 	Bucket: aws.String("library-pictures"),
-	// })
+func (s *LibraryBucketService) GetImage(objectKey string) []byte {
+	return nil
+}
 
-	fmt.Println(*output.Buckets[0].Name)
+func (s *LibraryBucketService) DeleteImage(objectKey string) error {
+	return nil
+}
 
+func (s *LibraryBucketService) ReplaceImage(objectKey string, newImage []byte) error {
 	return nil
 }

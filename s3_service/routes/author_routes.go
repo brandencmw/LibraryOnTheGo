@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AttachAuthorRoutes(router *gin.Engine) {
+func AttachAuthorRoutes(router *gin.Engine, controller *controllers.AuthorsController) {
 	authorGroup := router.Group("/authors")
 	{
-		authorGroup.POST("/add-author-image", controllers.UploadAuthorImage)
+		authorGroup.POST("/add-author-image", controller.UploadAuthorImage)
 		authorGroup.GET("/:object-key", controllers.RetrieveAuthorImage)
 	}
 
