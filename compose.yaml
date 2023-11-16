@@ -6,8 +6,12 @@ services:
     restart: always
     ports:
       - "5432:5432"
+    user: postgres
     volumes:
       - data:/var/lib/postgresql/data
+      - ./certificates/database/postgres.crt:/var/lib/postgresql/data/postgres.crt
+      - ./certificates/database/postgres.key:/var/lib/postgresql/data/postgres.key
+      - ./certificates/root/root-ca.crt:/var/lib/postgresql/data/root-ca.crt
 
   server:
     container_name: server
@@ -16,6 +20,12 @@ services:
       dockerfile: dockerfile
     env_file:
       - docker.env
+      - postgres.docker.env
+      - server.docker.env
+    volumes:
+      - ./certificates/backend/server:/app/certificates/server
+      - ./certificates/backend/client:/app/certificates/client
+      - ./certificates/root/root-ca.crt:/app/certificates/root-ca.crt
     depends_on:
       - database
     ports:
@@ -28,6 +38,9 @@ services:
       dockerfile: dockerfile
     env_file:
       - docker.env
+    volumes:
+      - ./certificates/s3_service:/app/certificates
+      - ./certificates/root/root-ca.crt:/app/certificates/root-ca.crt
     ports:
       - "8081:443"
 
@@ -38,6 +51,20 @@ services:
       dockerfile: dockerfile
     ports:
       - "8082:80"
+
+  migrator:
+    container_name: migrator
+    build: 
+      context: ./migrator
+      dockerfile: dockerfile
+    env_file:
+      - postgres.docker.env
+    volumes:
+      - ./migrator/migrations:/app/migrations
+      - ./certificates/migrator:/certificates
+      - ./certificates/root/root-ca.crt:/certificates/root-ca.crt
+    depends_on:
+      - database
 
 volumes:
   data:

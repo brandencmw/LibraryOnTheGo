@@ -1,0 +1,10 @@
+FROM migrate/migrate:latest
+
+ENV MIGRATION_LOCATION=./app/migrations
+ENV ROOT_CA=./certificates/root-ca.crt
+ENV SSL_CERT=./certificates/migrator.crt
+ENV SSL_KEY=./certificates/migrator.key
+ENV SSL_OPTIONS=sslmode=verify-full&sslrootcert=${ROOT_CA}&sslcert=${SSL_CERT}&sslkey=${SSL_KEY}
+ENV PG_CONN_STRING=postgres://postgres@database:5432/library_db?${SSL_OPTIONS}
+
+ENTRYPOINT ["tail", "-f", "/dev/null"]
