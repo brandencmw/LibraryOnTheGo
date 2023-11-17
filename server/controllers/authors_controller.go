@@ -33,7 +33,6 @@ func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
 		LastName:     addAuthorRequest.LastName,
 		Bio:          addAuthorRequest.Bio,
 	}
-
 	if err := c.service.AddAuthor(authorToAdd); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload author info"})
 		ctx.AbortWithError(http.StatusInternalServerError, err)

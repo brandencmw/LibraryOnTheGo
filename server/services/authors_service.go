@@ -16,11 +16,13 @@ type AddAuthorInfo struct {
 
 type AuthorsService struct {
 	ImageRepo data.ImageRepository
+	DataRepo  data.AuthorRepository
 }
 
-func NewAuthorsService(imageRepo data.ImageRepository) *AuthorsService {
+func NewAuthorsService(imageRepo data.ImageRepository, dataRepo data.AuthorRepository) *AuthorsService {
 	return &AuthorsService{
 		ImageRepo: imageRepo,
+		DataRepo:  dataRepo,
 	}
 }
 
@@ -37,10 +39,11 @@ func (s *AuthorsService) AddAuthor(author AddAuthorInfo) error {
 		return err
 	}
 
-	err = uploadAuthorInfo(author.FirstName, author.LastName, author.Bio)
-	return err
-}
-
-func uploadAuthorInfo(firstName, lastName, bio string) error {
+	createAuthorData := data.CreateAuthorData{
+		FirstName: author.FirstName,
+		LastName:  author.LastName,
+		Bio:       author.Bio,
+	}
+	s.DataRepo.CreateAuthor(createAuthorData)
 	return nil
 }

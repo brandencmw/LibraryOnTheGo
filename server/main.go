@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"fmt"
 	"libraryonthego/server/config"
 	"libraryonthego/server/controllers"
 	"libraryonthego/server/data"
@@ -12,26 +13,28 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func createAuthorController(client *http.Client) *controllers.AuthorsController {
+func createAuthorController(client *http.Client, connPool *pgxpool.Pool) *controllers.AuthorsController {
 	return controllers.NewAuthorsController(
 		services.NewAuthorsService(
 			data.NewS3ImageRepository(client, "https://s3_service/authors"),
+			data.NewPostgresAuthorRepository(connPool),
 		),
 	)
 }
 
-func setupAuthorRoutes(router *gin.Engine, client *http.Client) {
-	controller := createAuthorController(client)
+func setupAuthorRoutes(router *gin.Engine, client *http.Client, connPool *pgxpool.Pool) {
+	controller := createAuthorController(client, connPool)
 	routes.AttachAuthorRoutes(router, controller)
 }
 
-func setupRouter(client *http.Client) *gin.Engine {
+func setupRouter(client *http.Client, connPool *pgxpool.Pool) *gin.Engine {
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
 	routes.AttachAuthorizationRoutes(router)
-	setupAuthorRoutes(router, client)
+	setupAuthorRoutes(router, client, connPool)
 	return router
 }
 
@@ -90,7 +93,13 @@ func main() {
 		log.Fatalf("Failed to create http client: %v", err.Error())
 	}
 
-	router := setupRouter(httpClient)
+	dbConnectionPool, err := data.CreatePostgresConnectionPool()
+	if err != nil {
+		log.Fatalf("Failed to connect to postgres: %v", err.Error())
+	}
+	fmt.Printf("Pool: %v", dbConnectionPool)
+
+	router := setupRouter(httpClient, dbConnectionPool)
 
 	serverTLS, err := setupServerTLS()
 	if err != nil {
