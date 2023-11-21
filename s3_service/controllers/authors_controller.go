@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"s3/services"
@@ -40,8 +41,28 @@ func (c *AuthorsController) UploadAuthorImage(ctx *gin.Context) {
 	})
 }
 
-func RetrieveAuthorImage(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"page": "retrieve author picture",
+func (c *AuthorsController) RetrieveAuthorImage(ctx *gin.Context) {
+
+	key := ctx.Query("img-name")
+	if key == "" {
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("Key required for request"))
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Key required for request",
+		})
+		return
+	}
+
+	image, err := c.Service.GetImage(key)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"imageContent": image.Content,
+		"imageName":    image.Name,
 	})
 }
