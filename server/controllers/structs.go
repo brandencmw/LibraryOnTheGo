@@ -8,3 +8,24 @@ type addAuthorRequest struct {
 	LastName  string                `form:"lastName" binding:"required"`
 	Bio       string                `form:"bio" binding:"required"`
 }
+
+type getAuthorRequest struct {
+	IncludeImage *bool `json:"includeImage"`
+}
+
+type getAuthorResponse struct {
+	ID        uint          `json:"id"`
+	FirstName string        `json:"firstName"`
+	LastName  string        `json:"lastName"`
+	Bio       string        `json:"bio"`
+	Headshot  imageResponse `json:"headshot"`
+}
+
+type imageResponse struct {
+	Content string `json:"content"`
+	Name    string `json:"name"`
+}
+
+type deleteAuthorRequest struct {
+	ID uint `json:"id" binding:"required"`
+}

@@ -1,4 +1,4 @@
-package utils
+package files
 
 import (
 	"mime/multipart"
@@ -8,7 +8,7 @@ import (
 func CreateFriendlyFileName(baseFileName string, friendlyNamePieces ...string) string {
 	fileName := strings.Join(friendlyNamePieces, "-")
 	fileExtension := GetFileExtension(baseFileName)
-	return fileName + "." + fileExtension
+	return fileName + fileExtension
 }
 
 func GetMultipartFormContents(fileHeader *multipart.FileHeader) (fileContents []byte, err error) {
@@ -35,5 +35,5 @@ func GetFileExtension(fileName string) string {
 	if len(fileNameParts) < 2 {
 		return ""
 	}
-	return fileNameParts[1]
+	return "." + fileNameParts[1]
 }

@@ -7,17 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type CreateAuthorData struct {
+type Author struct {
 	FirstName string
 	LastName  string
 	Bio       string
-}
-
-type AuthorRepository interface {
-	CreateAuthor(CreateAuthorData) error
-	GetAuthor()
-	UpdateAuthor()
-	DeleteAuthor()
 }
 
 type PostgresAuthorRepository struct {
@@ -46,18 +39,62 @@ func NewPostgresAuthorRepository(pool *pgxpool.Pool) *PostgresAuthorRepository {
 	}
 }
 
-func (r *PostgresAuthorRepository) CreateAuthor(author CreateAuthorData) error {
-	conn, _ := r.connPool.Acquire(context.TODO())
+func (r *PostgresAuthorRepository) CreateAuthor(author Author) error {
+	conn, err := r.connPool.Acquire(context.TODO())
 	defer conn.Release()
-	conn.Exec(context.TODO(), "INSERT INTO authors(first_name, last_name, bio) VALUES ($1, $2, $3)", author.FirstName, author.LastName, author.Bio)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(context.TODO(), "INSERT INTO authors(first_name, last_name, bio) VALUES ($1, $2, $3)", author.FirstName, author.LastName, author.Bio)
+	return err
+}
+
+func (r *PostgresAuthorRepository) GetAuthor(ID uint) (Author, error) {
+	conn, err := r.connPool.Acquire(context.TODO())
+	if err != nil {
+		return Author{}, err
+	}
+
+	defer conn.Release()
+	row := conn.QueryRow(context.TODO(), "SELECT first_name, last_name, bio FROM authors WHERE id=$1", ID)
+	var firstName, lastName, bio string
+	err = row.Scan(&firstName, &lastName, &bio)
+	if err != nil {
+		return Author{}, err
+	}
+
+	return Author{FirstName: firstName, LastName: lastName, Bio: bio}, nil
+}
+
+func (r *PostgresAuthorRepository) GetAllAuthors() (map[uint]Author, error) {
+	conn, err := r.connPool.Acquire(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Release()
+	rows, err := conn.Query(context.TODO(), "SELECT id, first_name, last_name, bio FROM authors")
+	if err != nil {
+		return nil, err
+	}
+
+	var rowID uint
+	var rowFirstName, rowLastName, rowBio string
+	authors := make(map[uint]Author, 0)
+	for rows.Next() {
+		err := rows.Scan(&rowID, &rowFirstName, &rowLastName, &rowBio)
+		if err != nil {
+			return authors, err
+		}
+		authors[rowID] = Author{FirstName: rowFirstName, LastName: rowLastName, Bio: rowBio}
+	}
+	return authors, nil
+}
+
+func (r *PostgresAuthorRepository) UpdateAuthor(ID uint, author Author) error {
 	return nil
 }
 
-func (r *PostgresAuthorRepository) GetAuthor() {
-}
-
-func (r *PostgresAuthorRepository) UpdateAuthor() {
-}
-
-func (r *PostgresAuthorRepository) DeleteAuthor() {
+func (r *PostgresAuthorRepository) DeleteAuthor(ID uint) error {
+	return nil
 }

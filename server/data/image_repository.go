@@ -8,12 +8,6 @@ import (
 	"net/http"
 )
 
-type ImageRepository interface {
-	AddImage(string, []byte) error
-	DeleteImage(string) error
-	ReplaceImage(string, []byte) error
-}
-
 type S3ImageRepository struct {
 	Client   *http.Client
 	basePath string
@@ -26,18 +20,18 @@ func NewS3ImageRepository(client *http.Client, basePath string) *S3ImageReposito
 	}
 }
 
-type uploadToS3Request struct {
-	Image     []byte `json:"image"`
+type ImageJSON struct {
+	Image     []byte `json:"imageContent"`
 	ImageName string `json:"imageName"`
 }
 
-func (r *S3ImageRepository) AddImage(imageName string, image []byte) error {
-	body, err := createS3RequestBody(imageName, image)
+func (r *S3ImageRepository) AddImage(img ImageJSON) error {
+	body, err := marshalImageJSON(img)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, r.basePath+"/add-author-image", body)
+	req, err := http.NewRequest(http.MethodPost, r.basePath+"/add", body)
 	if err != nil {
 		return err
 	}
@@ -45,8 +39,6 @@ func (r *S3ImageRepository) AddImage(imageName string, image []byte) error {
 	res, err := r.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error with request: %v", err.Error())
-	} else if res.StatusCode != 200 {
-		return fmt.Errorf("Error from S3 server: %v", res.Body)
 	}
 
 	defer res.Body.Close()
@@ -58,18 +50,12 @@ func (r *S3ImageRepository) AddImage(imageName string, image []byte) error {
 		return fmt.Errorf("Error from S3 server: %v", resBody)
 	}
 
-	fmt.Printf("Res body: %v\n", string(resBody))
 	return nil
 }
 
-func createS3RequestBody(imageName string, image []byte) (*bytes.Reader, error) {
+func marshalImageJSON(img ImageJSON) (*bytes.Reader, error) {
 
-	reqBody := uploadToS3Request{
-		Image:     image,
-		ImageName: imageName,
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
+	jsonBody, err := json.Marshal(img)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +67,38 @@ func (r *S3ImageRepository) DeleteImage(imageName string) error {
 	return nil
 }
 
-func (r *S3ImageRepository) ReplaceImage(imageName string, newImage []byte) error {
+func (r *S3ImageRepository) ReplaceImage(ImageJSON) error {
 	return nil
+}
+
+func (r *S3ImageRepository) GetImage(imageName string) (*ImageJSON, error) {
+
+	req, err := http.NewRequest(http.MethodGet, r.basePath+"?img-name="+imageName, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := r.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Error with request: %v", err.Error())
+	}
+
+	defer res.Body.Close()
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("Error from S3 server: %+v", string(resBody))
+	}
+
+	var img ImageJSON
+	fmt.Printf("JSON: %+v\n", string(resBody))
+	err = json.Unmarshal(resBody, &img)
+	if err != nil {
+		return nil, fmt.Errorf("Could not unmarshal: %v", err.Error())
+	}
+
+	return &img, nil
 }

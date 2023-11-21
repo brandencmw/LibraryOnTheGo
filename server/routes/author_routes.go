@@ -10,14 +10,13 @@ import (
 func AttachAuthorRoutes(router *gin.Engine, controller *controllers.AuthorsController) {
 	authorGroup := router.Group("/authors")
 	{
-		authorGroup.GET("/", controller.GetAllAuthors)
-		authorGroup.GET("/:authorID", controller.GetAuthor)
+		authorGroup.GET("", controller.GetAuthor)
 	}
 
-	protectedAuthorGroup := authorGroup.Group("/auth")
+	protectedAuthorGroup := authorGroup.Group("/auth", middleware.AuthMiddleware)
 	{
-		protectedAuthorGroup.POST("/create", middleware.AuthMiddleware, controller.AddAuthor)
-		protectedAuthorGroup.DELETE("/delete/:authorID", middleware.AuthMiddleware, controller.DeleteAuthor)
-		protectedAuthorGroup.PUT("/update", middleware.AuthMiddleware, controller.UpdateAuthor)
+		protectedAuthorGroup.POST("/create", controller.AddAuthor)
+		protectedAuthorGroup.DELETE("/delete", controller.DeleteAuthor)
+		protectedAuthorGroup.PUT("/update", controller.UpdateAuthor)
 	}
 }
