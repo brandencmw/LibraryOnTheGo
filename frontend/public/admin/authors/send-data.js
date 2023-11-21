@@ -1,7 +1,12 @@
 async function sendDataToBackend(formData, endpoint) {
     url = "https://localhost:8080" + endpoint
+    const options = {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+    }
 
-    response = await fetch(url, {method: "POST", credentials: "include", body: formData})
+    response = await fetch(url, options)
     if (!response.ok) {
         throw new Error("Not OK")
     }
@@ -11,7 +16,6 @@ async function sendDataToBackend(formData, endpoint) {
 
 
 addAuthorForm = document.getElementById("addAuthorForm")
-addBookForm = document.getElementById("addBookForm")
 
 addAuthorForm.addEventListener("submit", event => {
     event.preventDefault()
@@ -22,7 +26,7 @@ addAuthorForm.addEventListener("submit", event => {
     formData.append("headshot", document.getElementById("authorHeadshotUpload").files[0])
 
 
-    sendDataToBackend(formData, "/authors/create")
+    sendDataToBackend(formData, "/authors/auth/create")
         .then(response => console.log(response))
         .catch(err => console.error(err))
     

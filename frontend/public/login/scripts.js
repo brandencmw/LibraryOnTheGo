@@ -1,6 +1,11 @@
 async function requestLogin(requestData) {
-    const url = "https://localhost:8080/login";
-    const response = await fetch(url, {method: "POST", credentials: "include", body: JSON.stringify(requestData)})
+    const url = "https://localhost:8080/auth/login";
+    const options = {
+        method: "POST", 
+        credentials: "include", 
+        body: JSON.stringify(requestData)
+    }
+    const response = await fetch(url, options)
     if (!response.ok) {
         throw new Error("Response not ok")
     }
