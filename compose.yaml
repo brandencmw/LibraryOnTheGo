@@ -23,9 +23,11 @@ services:
       - postgres.docker.env
       - server.docker.env
     volumes:
-      - ./certificates/backend/server:/app/certificates/server
-      - ./certificates/backend/client:/app/certificates/client
-      - ./certificates/root/root-ca.crt:/app/certificates/root-ca.crt
+      - ./certificates/backend/server:/app/certificates/server:ro
+      # - ./certificates/backend/client:/app/certificates/client:ro
+      - ./certificates/backend/client/backend-client.crt:/app/certificates/client/backend-client.crt:ro
+      - ./certificates/backend/client/backend-client.key:/app/certificates/client/backend-client.key:ro
+      - ./certificates/root/root-ca.crt:/app/certificates/root-ca.crt:ro
     depends_on:
       - database
     ports:

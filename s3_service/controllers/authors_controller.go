@@ -10,10 +10,10 @@ import (
 )
 
 type AuthorsController struct {
-	Service *services.LibraryBucketService
+	Service *services.BucketService
 }
 
-func NewAuthorsControlller(service *services.LibraryBucketService) *AuthorsController {
+func NewAuthorsControlller(service *services.BucketService) *AuthorsController {
 	return &AuthorsController{
 		Service: service,
 	}
@@ -65,4 +65,20 @@ func (c *AuthorsController) RetrieveAuthorImage(ctx *gin.Context) {
 		"imageContent": image.Content,
 		"imageName":    image.Name,
 	})
+}
+
+func (c *AuthorsController) DeleteAuthorImage(ctx *gin.Context) {
+	imageName := ctx.Query("img-name")
+	if imageName == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Request requires img-name param"})
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("img-name param not provided"))
+		return
+	}
+	err := c.Service.DeleteImage(imageName)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{})
 }

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"libraryonthego/server/files"
 	"libraryonthego/server/services"
@@ -55,17 +56,23 @@ func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
 
 func (c *AuthorsController) GetAuthor(ctx *gin.Context) {
 
-	defaultIncludeImage := true
-	var getAuthorRequest getAuthorRequest
-	ctx.ShouldBindJSON(&getAuthorRequest)
-
-	if getAuthorRequest.IncludeImage == nil {
-		getAuthorRequest.IncludeImage = &defaultIncludeImage
+	strImageFlag := ctx.Query("includeimages")
+	var imageFlag bool
+	var err error
+	if strImageFlag == "" {
+		imageFlag = true
+	} else {
+		imageFlag, err = strconv.ParseBool(strImageFlag)
+		if err != nil {
+			ctx.AbortWithError(http.StatusBadRequest, errors.New("Invalid image option for includeimages provided"))
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Option for includeimages was %v, expected boolean value", strImageFlag)})
+			return
+		}
 	}
 
-	id := ctx.Query("author-id")
+	id := ctx.Query("id")
 	if id == "" {
-		c.getAllAuthors(ctx, *getAuthorRequest.IncludeImage)
+		c.getAllAuthors(ctx, imageFlag)
 	} else {
 		id, err := strconv.ParseUint(id, 10, 64)
 		if err != nil {
@@ -74,7 +81,7 @@ func (c *AuthorsController) GetAuthor(ctx *gin.Context) {
 			})
 			return
 		}
-		c.getAuthorByID(ctx, uint(id), *getAuthorRequest.IncludeImage)
+		c.getAuthorByID(ctx, uint(id), imageFlag)
 	}
 }
 
@@ -108,17 +115,52 @@ func (c *AuthorsController) getAllAuthors(ctx *gin.Context, includeImages bool) 
 }
 
 func (c *AuthorsController) getAuthorByID(ctx *gin.Context, ID uint, includeImage bool) {
-	ctx.String(http.StatusOK, "ID: %v", ID)
+
+	author, err := c.service.GetAuthor(ID, includeImage)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Could not retrieve author with ID %v", ID)})
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	img := imageResponse{
+		Name:    author.Headshot.Name,
+		Content: base64.StdEncoding.EncodeToString(author.Headshot.Content),
+	}
+
+	resp := getAuthorResponse{
+		ID:        author.ID,
+		FirstName: *author.FirstName,
+		LastName:  *author.LastName,
+		Bio:       *author.Bio,
+		Headshot:  img,
+	}
+	ctx.JSON(http.StatusOK, gin.H{"author": resp})
 }
 
 func (c *AuthorsController) DeleteAuthor(ctx *gin.Context) {
-	var req deleteAuthorRequest
-	err := ctx.BindJSON(&req)
-	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, err)
-		ctx.JSON(http.StatusBadRequest, "Must have ID in request")
+	strID := ctx.Query("id")
+	if strID == "" {
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("Must have ID in request"))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must have ID in request"})
+		return
 	}
-	ctx.String(http.StatusOK, "ID: %v", req.ID)
+
+	ID, err := strconv.ParseUint(strID, 10, 64)
+	if err != nil {
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("Invalid ID provided"))
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID provided"})
+		return
+	}
+
+	err = c.service.DeleteAuthor(uint(ID))
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to delete: %v", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete author"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{})
 }
 
 func (c *AuthorsController) UpdateAuthor(ctx *gin.Context) {

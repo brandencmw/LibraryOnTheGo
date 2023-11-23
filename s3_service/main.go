@@ -17,7 +17,7 @@ import (
 
 func setupAuthorsController(client *s3.Client) *controllers.AuthorsController {
 	return controllers.NewAuthorsControlller(
-		services.NewLibraryBucketService("authors", client),
+		services.NewBucketService("library-pictures", "authors", client),
 	)
 }
 

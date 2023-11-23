@@ -63,7 +63,31 @@ func marshalImageJSON(img ImageJSON) (*bytes.Reader, error) {
 	return bytes.NewReader(jsonBody), nil
 }
 
-func (r *S3ImageRepository) DeleteImage(imageName string) error {
+func (r *S3ImageRepository) DeleteImage(imageName string, finished chan bool) error {
+	req, err := http.NewRequest(http.MethodDelete, r.basePath+"/delete?img-name="+imageName, nil)
+	if err != nil {
+		finished <- false
+		return err
+	}
+
+	res, err := r.Client.Do(req)
+	if err != nil {
+		finished <- false
+		return err
+	}
+
+	defer res.Body.Close()
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		finished <- false
+		return err
+	}
+	if res.StatusCode != 200 {
+		finished <- false
+		return fmt.Errorf("Error from S3 server: %+v", string(resBody))
+	}
+	finished <- true
 	return nil
 }
 
@@ -72,7 +96,6 @@ func (r *S3ImageRepository) ReplaceImage(ImageJSON) error {
 }
 
 func (r *S3ImageRepository) GetImage(imageName string) (*ImageJSON, error) {
-
 	req, err := http.NewRequest(http.MethodGet, r.basePath+"?img-name="+imageName, nil)
 	if err != nil {
 		return nil, err

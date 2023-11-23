@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -11,6 +12,11 @@ type Author struct {
 	FirstName string
 	LastName  string
 	Bio       string
+}
+
+type AuthorWithErr struct {
+	Author
+	Err error
 }
 
 type PostgresAuthorRepository struct {
@@ -95,6 +101,29 @@ func (r *PostgresAuthorRepository) UpdateAuthor(ID uint, author Author) error {
 	return nil
 }
 
-func (r *PostgresAuthorRepository) DeleteAuthor(ID uint) error {
-	return nil
+func (r *PostgresAuthorRepository) DeleteAuthor(ID uint, proceed chan bool, result chan AuthorWithErr) {
+	a := AuthorWithErr{}
+	tx, err := r.connPool.BeginTx(context.TODO(), pgx.TxOptions{})
+	if err != nil {
+		tx.Rollback(context.TODO())
+		a.Err = err
+		result <- a
+	}
+
+	row := tx.QueryRow(context.TODO(), "DELETE FROM authors WHERE id=$1 RETURNING first_name, last_name", ID)
+	err = row.Scan(&a.FirstName, &a.LastName)
+	if err != nil {
+		tx.Rollback(context.TODO())
+		a.Err = err
+		result <- a
+	}
+
+	result <- a
+
+	commit := <-proceed
+	if commit {
+		tx.Commit(context.TODO())
+	} else {
+		tx.Rollback(context.TODO())
+	}
 }

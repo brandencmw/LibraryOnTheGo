@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"libraryonthego/server/data"
 	"libraryonthego/server/files"
 	"sync"
@@ -12,13 +13,13 @@ type AuthorRepository interface {
 	GetAuthor(ID uint) (data.Author, error)
 	GetAllAuthors() (map[uint]data.Author, error)
 	UpdateAuthor(ID uint, author data.Author) error
-	DeleteAuthor(ID uint) error
+	DeleteAuthor(ID uint, proceed chan bool, result chan data.AuthorWithErr)
 }
 
 type ImageRepository interface {
 	AddImage(data.ImageJSON) error
 	GetImage(string) (*data.ImageJSON, error)
-	DeleteImage(string) error
+	DeleteImage(string, chan bool) error
 	ReplaceImage(data.ImageJSON) error
 }
 
@@ -192,13 +193,31 @@ func (s *AuthorsService) GetAuthor(ID uint, includeImage bool) (AuthorOutput, er
 	}
 	if includeImage {
 		errChan := make(chan error)
-		s.getAuthorImageAsync(&ao, nil, errChan)
+		go s.getAuthorImageAsync(&ao, nil, errChan)
 		err = <-errChan
 		if err != nil {
 			return AuthorOutput{}, err
 		}
+		close(errChan)
 	}
 	return ao, nil
+}
+
+func (s *AuthorsService) DeleteAuthor(ID uint) error {
+	proceed := make(chan bool)
+	authorChan := make(chan data.AuthorWithErr)
+	go s.DataRepo.DeleteAuthor(ID, proceed, authorChan)
+	author := <-authorChan
+	if author.Err != nil {
+		return fmt.Errorf("Failed to delete author with ID %v", author.Err.Error())
+	}
+
+	imageName := files.CreateFriendlyFileName("", author.FirstName, author.LastName)
+
+	err := s.ImageRepo.DeleteImage(imageName, proceed)
+	close(authorChan)
+	close(proceed)
+	return err
 }
 
 func UpdateAuthor(ID uint, a author) error {
