@@ -1,5 +1,5 @@
 async function getAuthors() {
-    const url = "https://localhost:8080/authors"
+    const url = "https://localhost:8080/authors?includeimages=false"
 
     let response = await fetch(url, {method: "GET"})
     if (response.status != 200) {
