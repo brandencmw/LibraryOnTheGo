@@ -9,9 +9,44 @@ import (
 )
 
 type Author struct {
-	FirstName string
-	LastName  string
-	Bio       string
+	ID        *uint
+	FirstName *string
+	LastName  *string
+	Bio       *string
+}
+
+type AuthorOption func(author *Author)
+
+func WithID(ID uint) AuthorOption {
+	return func(author *Author) {
+		author.ID = &ID
+	}
+}
+
+func WithFirstName(fName string) AuthorOption {
+	return func(author *Author) {
+		author.FirstName = &fName
+	}
+}
+
+func WithLastName(lName string) AuthorOption {
+	return func(author *Author) {
+		author.LastName = &lName
+	}
+}
+
+func WithBio(bio string) AuthorOption {
+	return func(author *Author) {
+		author.Bio = &bio
+	}
+}
+
+func NewAuthor(options ...AuthorOption) *Author {
+	author := &Author{}
+	for _, option := range options {
+		option(author)
+	}
+	return author
 }
 
 type AuthorWithErr struct {
@@ -45,14 +80,24 @@ func NewPostgresAuthorRepository(pool *pgxpool.Pool) *PostgresAuthorRepository {
 	}
 }
 
-func (r *PostgresAuthorRepository) CreateAuthor(author Author) error {
-	conn, err := r.connPool.Acquire(context.TODO())
-	defer conn.Release()
+func (r *PostgresAuthorRepository) CreateAuthor(author Author, proceed chan bool, errChan chan error) {
+	tx, err := r.connPool.BeginTx(context.TODO(), pgx.TxOptions{})
+	defer tx.Rollback(context.TODO())
 	if err != nil {
-		return err
+		errChan <- err
+		return
 	}
-	_, err = conn.Exec(context.TODO(), "INSERT INTO authors(first_name, last_name, bio) VALUES ($1, $2, $3)", author.FirstName, author.LastName, author.Bio)
-	return err
+
+	_, err = tx.Exec(context.TODO(), "INSERT INTO authors(first_name, last_name, bio) VALUES ($1, $2, $3)", author.FirstName, author.LastName, author.Bio)
+	if err != nil {
+		errChan <- err
+		return
+	}
+
+	errChan <- nil
+	if <-proceed {
+		tx.Commit(context.TODO())
+	}
 }
 
 func (r *PostgresAuthorRepository) GetAuthor(ID uint) (Author, error) {
@@ -60,8 +105,8 @@ func (r *PostgresAuthorRepository) GetAuthor(ID uint) (Author, error) {
 	if err != nil {
 		return Author{}, err
 	}
-
 	defer conn.Release()
+
 	row := conn.QueryRow(context.TODO(), "SELECT first_name, last_name, bio FROM authors WHERE id=$1", ID)
 	var firstName, lastName, bio string
 	err = row.Scan(&firstName, &lastName, &bio)
@@ -69,53 +114,92 @@ func (r *PostgresAuthorRepository) GetAuthor(ID uint) (Author, error) {
 		return Author{}, err
 	}
 
-	return Author{FirstName: firstName, LastName: lastName, Bio: bio}, nil
+	return Author{ID: &ID, FirstName: &firstName, LastName: &lastName, Bio: &bio}, nil
 }
 
-func (r *PostgresAuthorRepository) GetAllAuthors() (map[uint]Author, error) {
+func (r *PostgresAuthorRepository) GetAllAuthors() ([]Author, error) {
 	conn, err := r.connPool.Acquire(context.TODO())
 	if err != nil {
 		return nil, err
 	}
 
 	defer conn.Release()
-	rows, err := conn.Query(context.TODO(), "SELECT id, first_name, last_name, bio FROM authors")
+	rows, err := conn.Query(context.TODO(), "SELECT id, first_name, last_name, bio FROM authors ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
 
 	var rowID uint
 	var rowFirstName, rowLastName, rowBio string
-	authors := make(map[uint]Author, 0)
+	authors := make([]Author, 0)
 	for rows.Next() {
 		err := rows.Scan(&rowID, &rowFirstName, &rowLastName, &rowBio)
 		if err != nil {
 			return authors, err
 		}
-		authors[rowID] = Author{FirstName: rowFirstName, LastName: rowLastName, Bio: rowBio}
+		authors = append(authors, *NewAuthor(WithID(rowID), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
 	}
 	return authors, nil
 }
 
-func (r *PostgresAuthorRepository) UpdateAuthor(ID uint, author Author) error {
-	return nil
+func (r *PostgresAuthorRepository) UpdateAuthor(ID uint, author Author, proceed chan bool, result chan AuthorWithErr) {
+	a := AuthorWithErr{}
+	tx, err := r.connPool.BeginTx(context.TODO(), pgx.TxOptions{})
+	defer tx.Rollback(context.TODO())
+	if err != nil {
+		a.Err = err
+		result <- a
+		return
+	}
+
+	// Get updated first and last name to update image name
+	row := tx.QueryRow(context.TODO(),
+		`UPDATE authors
+		SET
+			first_name=COALESCE($1, first_name),
+			last_name=COALESCE($2, last_name),
+			bio=COALESCE($3, bio)
+		WHERE
+			id=$4
+		RETURNING
+			first_name, last_name`,
+		author.FirstName, author.LastName, author.Bio, author.ID)
+
+	var rowFName, rowLName string
+	err = row.Scan(&rowFName, &rowLName)
+	if err != nil {
+		a.Err = err
+		result <- a
+		return
+	}
+
+	a.FirstName = &rowFName
+	a.LastName = &rowLName
+
+	result <- a
+
+	commit := <-proceed
+	if commit {
+		tx.Commit(context.TODO())
+	}
 }
 
 func (r *PostgresAuthorRepository) DeleteAuthor(ID uint, proceed chan bool, result chan AuthorWithErr) {
 	a := AuthorWithErr{}
 	tx, err := r.connPool.BeginTx(context.TODO(), pgx.TxOptions{})
+	defer tx.Rollback(context.TODO())
 	if err != nil {
-		tx.Rollback(context.TODO())
 		a.Err = err
 		result <- a
+		return
 	}
 
 	row := tx.QueryRow(context.TODO(), "DELETE FROM authors WHERE id=$1 RETURNING first_name, last_name", ID)
 	err = row.Scan(&a.FirstName, &a.LastName)
 	if err != nil {
-		tx.Rollback(context.TODO())
 		a.Err = err
 		result <- a
+		return
 	}
 
 	result <- a
@@ -123,7 +207,5 @@ func (r *PostgresAuthorRepository) DeleteAuthor(ID uint, proceed chan bool, resu
 	commit := <-proceed
 	if commit {
 		tx.Commit(context.TODO())
-	} else {
-		tx.Rollback(context.TODO())
 	}
 }

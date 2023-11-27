@@ -20,40 +20,62 @@ func NewS3ImageRepository(client *http.Client, basePath string) *S3ImageReposito
 	}
 }
 
-type ImageJSON struct {
+type ImageJSON interface {
+	AddImageJSON | UpdateImageJSON
+}
+
+type AddImageJSON struct {
 	Image     []byte `json:"imageContent"`
 	ImageName string `json:"imageName"`
 }
 
-func (r *S3ImageRepository) AddImage(img ImageJSON) error {
-	body, err := marshalImageJSON(img)
+type UpdateImageJSON struct {
+	OriginalName string `json:"originalName"`
+	NewName      string `json:"newName"`
+	NewContent   []byte `json:"newContent"`
+}
+
+func (r *S3ImageRepository) AddImage(img AddImageJSON, finished chan bool, errChan chan error) {
+	body, err := marshalJSON(img)
 	if err != nil {
-		return err
+		finished <- false
+		errChan <- err
+		return
 	}
 
 	req, err := http.NewRequest(http.MethodPost, r.basePath+"/add", body)
 	if err != nil {
-		return err
+		finished <- false
+		errChan <- err
+		return
 	}
 
 	res, err := r.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Error with request: %v", err.Error())
+		finished <- false
+		errChan <- fmt.Errorf("Error with request: %v", err.Error())
+		return
 	}
 
 	defer res.Body.Close()
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return err
-	}
-	if res.StatusCode != 200 {
-		return fmt.Errorf("Error from S3 server: %v", resBody)
+		finished <- false
+		errChan <- err
+		return
 	}
 
-	return nil
+	if res.StatusCode != 200 {
+		finished <- false
+		errChan <- fmt.Errorf("Error from S3 server: %v", resBody)
+		return
+	}
+
+	finished <- true
+	errChan <- nil
 }
 
-func marshalImageJSON(img ImageJSON) (*bytes.Reader, error) {
+func marshalJSON[T ImageJSON](img T) (*bytes.Reader, error) {
 
 	jsonBody, err := json.Marshal(img)
 	if err != nil {
@@ -91,37 +113,73 @@ func (r *S3ImageRepository) DeleteImage(imageName string, finished chan bool) er
 	return nil
 }
 
-func (r *S3ImageRepository) ReplaceImage(ImageJSON) error {
-	return nil
-}
-
-func (r *S3ImageRepository) GetImage(imageName string) (*ImageJSON, error) {
-	req, err := http.NewRequest(http.MethodGet, r.basePath+"?img-name="+imageName, nil)
+func (r *S3ImageRepository) ReplaceImage(updatedImage UpdateImageJSON, finished chan bool) {
+	body, err := marshalJSON(updatedImage)
 	if err != nil {
-		return nil, err
+		finished <- false
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPut, r.basePath+"/update", body)
+	if err != nil {
+		finished <- false
+		return
 	}
 
 	res, err := r.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Error with request: %v", err.Error())
+		finished <- false
+		return
+	}
+
+	defer res.Body.Close()
+
+	_, err = io.ReadAll(res.Body)
+	if err != nil {
+		finished <- false
+		return
+	}
+	if res.StatusCode != 200 {
+		finished <- false
+		return
+	}
+
+	finished <- true
+}
+
+func (r *S3ImageRepository) GetImageReference(imageName string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, r.basePath+"/key?img="+imageName, nil)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := r.Client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("Error with request: %v", err.Error())
 	}
 
 	defer res.Body.Close()
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("Error from S3 server: %+v", string(resBody))
+		return "", fmt.Errorf("Error from S3 server: %+v", string(resBody))
 	}
 
-	var img ImageJSON
-	fmt.Printf("JSON: %+v\n", string(resBody))
-	err = json.Unmarshal(resBody, &img)
+	var jsonData map[string]json.RawMessage
+
+	err = json.Unmarshal([]byte(resBody), &jsonData)
 	if err != nil {
-		return nil, fmt.Errorf("Could not unmarshal: %v", err.Error())
+		return "", err
 	}
 
-	return &img, nil
+	var key string
+	err = json.Unmarshal(jsonData["key"], &key)
+	if err != nil {
+		return "", err
+	}
+
+	return key, nil
 }

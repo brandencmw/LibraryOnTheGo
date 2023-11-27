@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"libraryonthego/server/files"
@@ -44,8 +43,13 @@ func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
 		services.WithBio(req.Bio),
 		services.WithImage(&services.Image{Name: req.Headshot.Filename, Content: imageContent}),
 	)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create author"})
+		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to create author: %v", err))
+		return
+	}
 
-	if err := c.service.AddAuthor(*author); err != nil {
+	if err = c.service.AddAuthor(*author); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload author info"})
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -64,21 +68,22 @@ func (c *AuthorsController) GetAuthor(ctx *gin.Context) {
 	} else {
 		imageFlag, err = strconv.ParseBool(strImageFlag)
 		if err != nil {
-			ctx.AbortWithError(http.StatusBadRequest, errors.New("Invalid image option for includeimages provided"))
+			ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Invalid image option for includeimages provided, received %v", strImageFlag))
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Option for includeimages was %v, expected boolean value", strImageFlag)})
 			return
 		}
 	}
 
-	id := ctx.Query("id")
-	if id == "" {
+	strID := ctx.Query("id")
+	if strID == "" {
 		c.getAllAuthors(ctx, imageFlag)
 	} else {
-		id, err := strconv.ParseUint(id, 10, 64)
+		id, err := strconv.ParseUint(strID, 10, 64)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
 				"error": "Invalid argument for parameter authorID, must be unsigned integer",
 			})
+			ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Expected uint value for id, got %v", strID))
 			return
 		}
 		c.getAuthorByID(ctx, uint(id), imageFlag)
@@ -93,22 +98,14 @@ func (c *AuthorsController) getAllAuthors(ctx *gin.Context, includeImages bool) 
 		return
 	}
 
-	var image imageResponse
 	authorJSON := make([]getAuthorResponse, 0)
 	for _, author := range authors {
-		fmt.Printf("HEADSHOT: %v\n", author.Headshot)
-		if author.Headshot != nil {
-			image = imageResponse{
-				Name:    author.Headshot.Name,
-				Content: base64.StdEncoding.EncodeToString(author.Headshot.Content),
-			}
-		}
 		authorJSON = append(authorJSON, getAuthorResponse{
 			ID:        author.ID,
-			FirstName: *author.FirstName,
-			LastName:  *author.LastName,
-			Bio:       *author.Bio,
-			Headshot:  image,
+			FirstName: author.FirstName,
+			LastName:  author.LastName,
+			Bio:       author.Bio,
+			Headshot:  author.HeadshotObjectKey,
 		})
 	}
 	ctx.JSON(http.StatusOK, gin.H{"authors": authorJSON})
@@ -123,17 +120,12 @@ func (c *AuthorsController) getAuthorByID(ctx *gin.Context, ID uint, includeImag
 		return
 	}
 
-	img := imageResponse{
-		Name:    author.Headshot.Name,
-		Content: base64.StdEncoding.EncodeToString(author.Headshot.Content),
-	}
-
 	resp := getAuthorResponse{
 		ID:        author.ID,
-		FirstName: *author.FirstName,
-		LastName:  *author.LastName,
-		Bio:       *author.Bio,
-		Headshot:  img,
+		FirstName: author.FirstName,
+		LastName:  author.LastName,
+		Bio:       author.Bio,
+		Headshot:  author.HeadshotObjectKey,
 	}
 	ctx.JSON(http.StatusOK, gin.H{"author": resp})
 }
@@ -163,6 +155,61 @@ func (c *AuthorsController) DeleteAuthor(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
+func collectUpdateAuthorOptions(req updateAuthorRequest) ([]services.AuthorOption, error) {
+	options := make([]services.AuthorOption, 0)
+	if req.FirstName != nil {
+		options = append(options, services.WithFirstName(*req.FirstName))
+	}
+	if req.LastName != nil {
+		options = append(options, services.WithLastName(*req.LastName))
+	}
+	if req.Bio != nil {
+		options = append(options, services.WithBio(*req.Bio))
+	}
+	if req.Headshot != nil {
+		imageContent, err := files.GetMultipartFormContents(req.Headshot)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, services.WithImage(&services.Image{Name: req.Headshot.Filename, Content: imageContent}))
+	}
+	return options, nil
+}
+
 func (c *AuthorsController) UpdateAuthor(ctx *gin.Context) {
-	ctx.String(http.StatusOK, "Update author info")
+	var req updateAuthorRequest
+	ctx.ShouldBind(&req)
+	if req.ID == nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must provide ID of author to update"})
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("Must provide ID of author to update"))
+		return
+	}
+
+	options, err := collectUpdateAuthorOptions(req)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request"})
+		ctx.AbortWithError(http.StatusBadRequest, err)
+	}
+
+	if len(options) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must have at least one field to update"})
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("Must have at least one field to update"))
+		return
+	}
+
+	author, err := services.NewAuthor(options...)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create author"})
+		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to create author: %v", err))
+		return
+	}
+
+	err = c.service.UpdateAuthor(*req.ID, *author)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update author"})
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to update author: %v", err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, req)
 }

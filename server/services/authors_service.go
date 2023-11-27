@@ -9,18 +9,18 @@ import (
 )
 
 type AuthorRepository interface {
-	CreateAuthor(author data.Author) error
+	CreateAuthor(author data.Author, proceed chan bool, errChan chan error)
 	GetAuthor(ID uint) (data.Author, error)
-	GetAllAuthors() (map[uint]data.Author, error)
-	UpdateAuthor(ID uint, author data.Author) error
+	GetAllAuthors() ([]data.Author, error)
+	UpdateAuthor(ID uint, author data.Author, proceed chan bool, result chan data.AuthorWithErr)
 	DeleteAuthor(ID uint, proceed chan bool, result chan data.AuthorWithErr)
 }
 
 type ImageRepository interface {
-	AddImage(data.ImageJSON) error
-	GetImage(string) (*data.ImageJSON, error)
-	DeleteImage(string, chan bool) error
-	ReplaceImage(data.ImageJSON) error
+	AddImage(image data.AddImageJSON, finished chan bool, errChan chan error)
+	GetImageReference(name string) (string, error)
+	DeleteImage(name string, finished chan bool) error
+	ReplaceImage(updatedImage data.UpdateImageJSON, finished chan bool)
 }
 
 type Image struct {
@@ -84,8 +84,11 @@ func NewAuthor(options ...AuthorOption) (*author, error) {
 }
 
 type AuthorOutput struct {
-	ID uint
-	author
+	ID                uint
+	FirstName         string
+	LastName          string
+	Bio               string
+	HeadshotObjectKey string
 }
 
 type AuthorsService struct {
@@ -101,48 +104,61 @@ func NewAuthorsService(imageRepo ImageRepository, dataRepo AuthorRepository) *Au
 }
 
 func (s *AuthorsService) AddAuthor(a author) error {
+	proceed := make(chan bool)
+	errChan := make(chan error)
+	defer close(proceed)
+	defer close(errChan)
+	go s.DataRepo.CreateAuthor(data.Author{
+		FirstName: a.FirstName,
+		LastName:  a.LastName,
+		Bio:       a.Bio,
+	}, proceed, errChan)
 
-	imageName := files.CreateFriendlyFileName(a.Headshot.Name, *a.FirstName, *a.LastName)
-	image := data.ImageJSON{
-		Image:     a.Headshot.Content,
-		ImageName: imageName,
-	}
-	if err := s.ImageRepo.AddImage(image); err != nil {
+	err := <-errChan
+	if err != nil {
 		return err
 	}
 
-	err := s.DataRepo.CreateAuthor(data.Author{
-		FirstName: *a.FirstName,
-		LastName:  *a.LastName,
-		Bio:       *a.Bio,
-	})
+	imageName := files.CreateFriendlyFileName(a.Headshot.Name, *a.FirstName, *a.LastName)
+	go s.ImageRepo.AddImage(data.AddImageJSON{
+		Image:     a.Headshot.Content,
+		ImageName: imageName,
+	}, proceed, errChan)
 
+	err = <-errChan
 	return err
 }
 
-func (s *AuthorsService) getAuthorImageAsync(a *AuthorOutput, wg *sync.WaitGroup, c chan error) {
+func (s *AuthorsService) getHeadshotObjectKeySync(a *AuthorOutput) error {
+	fileName := files.CreateFriendlyFileName("", a.FirstName, a.LastName)
+	reference, err := s.ImageRepo.GetImageReference(fileName)
+	if err != nil {
+		return err
+	}
+	a.HeadshotObjectKey = reference
+	return nil
+}
+
+func (s *AuthorsService) getHeadshotObjectKeyAsync(a *AuthorOutput, wg *sync.WaitGroup, c chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
-	fileName := files.CreateFriendlyFileName("", *a.FirstName, *a.LastName)
-	content, err := s.ImageRepo.GetImage(fileName)
+	fileName := files.CreateFriendlyFileName("", a.FirstName, a.LastName)
+	reference, err := s.ImageRepo.GetImageReference(fileName)
 	if err != nil {
 		c <- err
 		return
 	}
-	a.Headshot = &Image{
-		Content: content.Image,
-		Name:    content.ImageName,
-	}
+	a.HeadshotObjectKey = reference
 	c <- nil
 }
 
-func (s *AuthorsService) fetchAuthorImages(authors *[]*AuthorOutput) error {
+func (s *AuthorsService) fetchHeadshotObjectKeys(authors []*AuthorOutput) error {
 	var wg sync.WaitGroup
-	errChannel := make(chan error, len(*authors))
-	for _, author := range *authors {
+	errChannel := make(chan error, len(authors))
+	for _, author := range authors {
 		wg.Add(1)
-		go s.getAuthorImageAsync(author, &wg, errChannel)
+		go s.getHeadshotObjectKeyAsync(author, &wg, errChannel)
 	}
 
 	wg.Wait()
@@ -159,22 +175,18 @@ func (s *AuthorsService) GetAllAuthors(includeImages bool) ([]*AuthorOutput, err
 
 	authorData, err := s.DataRepo.GetAllAuthors()
 	authors := make([]*AuthorOutput, 0)
-	for id, author := range authorData {
-		a, _ := NewAuthor(WithFirstName(author.FirstName), WithLastName(author.LastName), WithBio(author.Bio))
+	for _, author := range authorData {
 		ao := &AuthorOutput{
-			ID:     id,
-			author: *a,
+			ID:        *author.ID,
+			FirstName: *author.FirstName,
+			LastName:  *author.LastName,
+			Bio:       *author.Bio,
 		}
-		NewAuthor(
-			WithFirstName(author.FirstName),
-			WithLastName(author.LastName),
-			WithBio(author.Bio),
-		)
 		authors = append(authors, ao)
 	}
 
 	if includeImages && err == nil {
-		err = s.fetchAuthorImages(&authors)
+		err = s.fetchHeadshotObjectKeys(authors)
 	}
 
 	return authors, err
@@ -186,19 +198,18 @@ func (s *AuthorsService) GetAuthor(ID uint, includeImage bool) (AuthorOutput, er
 		return AuthorOutput{}, err
 	}
 
-	a, err := NewAuthor(WithFirstName(author.FirstName), WithLastName(author.LastName), WithBio(author.Bio))
 	ao := AuthorOutput{
-		ID:     ID,
-		author: *a,
+		ID:        ID,
+		FirstName: *author.FirstName,
+		LastName:  *author.LastName,
+		Bio:       *author.Bio,
 	}
+
 	if includeImage {
-		errChan := make(chan error)
-		go s.getAuthorImageAsync(&ao, nil, errChan)
-		err = <-errChan
+		err = s.getHeadshotObjectKeySync(&ao)
 		if err != nil {
 			return AuthorOutput{}, err
 		}
-		close(errChan)
 	}
 	return ao, nil
 }
@@ -206,20 +217,63 @@ func (s *AuthorsService) GetAuthor(ID uint, includeImage bool) (AuthorOutput, er
 func (s *AuthorsService) DeleteAuthor(ID uint) error {
 	proceed := make(chan bool)
 	authorChan := make(chan data.AuthorWithErr)
+	defer close(authorChan)
+	defer close(proceed)
 	go s.DataRepo.DeleteAuthor(ID, proceed, authorChan)
 	author := <-authorChan
 	if author.Err != nil {
-		return fmt.Errorf("Failed to delete author with ID %v", author.Err.Error())
+		return fmt.Errorf("Failed to delete author with ID %v: %v", ID, author.Err.Error())
 	}
 
-	imageName := files.CreateFriendlyFileName("", author.FirstName, author.LastName)
+	imageName := files.CreateFriendlyFileName("", *author.FirstName, *author.LastName)
 
 	err := s.ImageRepo.DeleteImage(imageName, proceed)
-	close(authorChan)
-	close(proceed)
 	return err
 }
 
-func UpdateAuthor(ID uint, a author) error {
+func (s *AuthorsService) UpdateAuthor(ID uint, a author) error {
+	author := data.Author{
+		ID:        &ID,
+		FirstName: a.FirstName,
+		LastName:  a.LastName,
+		Bio:       a.Bio,
+	}
+
+	proceed := make(chan bool)
+	authorChan := make(chan data.AuthorWithErr)
+	defer close(proceed)
+	defer close(authorChan)
+
+	// If any of these fields have changed then the image needs to be updated with
+	// a new title or new content
+	if a.FirstName != nil || a.LastName != nil || a.Headshot != nil {
+		originalAuthor, err := s.DataRepo.GetAuthor(ID)
+		if err != nil {
+			return err
+		}
+		originalFilename := files.CreateFriendlyFileName("", *originalAuthor.FirstName, *originalAuthor.LastName)
+		updatedHeadshot := data.UpdateImageJSON{OriginalName: originalFilename}
+
+		if a.Headshot != nil {
+			updatedHeadshot.NewContent = a.Headshot.Content
+			updatedHeadshot.NewName = files.CreateFriendlyFileName(a.Headshot.Name, originalFilename)
+		}
+
+		go s.DataRepo.UpdateAuthor(ID, author, proceed, authorChan)
+		updatedAuthor := <-authorChan
+		if updatedAuthor.Err != nil {
+			return updatedAuthor.Err
+		}
+		updatedHeadshot.NewName = files.CreateFriendlyFileName(updatedHeadshot.NewName, *updatedAuthor.FirstName, *updatedAuthor.LastName)
+		fmt.Println("CONTENT:", updatedHeadshot.NewContent)
+		s.ImageRepo.ReplaceImage(updatedHeadshot, proceed)
+	} else {
+		go s.DataRepo.UpdateAuthor(ID, author, proceed, authorChan)
+		updatedAuthor := <-authorChan
+		if updatedAuthor.Err != nil {
+			return updatedAuthor.Err
+		}
+		proceed <- true
+	}
 	return nil
 }
