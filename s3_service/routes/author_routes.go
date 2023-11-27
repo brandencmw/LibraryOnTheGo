@@ -9,8 +9,9 @@ import (
 func AttachAuthorRoutes(router *gin.Engine, controller *controllers.AuthorsController) {
 	authorGroup := router.Group("/authors")
 	{
-		authorGroup.GET("", controller.RetrieveAuthorImage)
+		authorGroup.GET("/key", controller.RetrieveObjectKey)
 		authorGroup.POST("/add", controller.UploadAuthorImage)
+		authorGroup.PUT("/update", controller.ReplaceAuthorImage)
 		authorGroup.DELETE("/delete", controller.DeleteAuthorImage)
 	}
 

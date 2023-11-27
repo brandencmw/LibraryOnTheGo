@@ -41,32 +41,6 @@ func (c *AuthorsController) UploadAuthorImage(ctx *gin.Context) {
 	})
 }
 
-func (c *AuthorsController) RetrieveAuthorImage(ctx *gin.Context) {
-
-	key := ctx.Query("img-name")
-	if key == "" {
-		ctx.AbortWithError(http.StatusBadRequest, errors.New("Key required for request"))
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Key required for request",
-		})
-		return
-	}
-
-	image, err := c.Service.GetImage(key)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		ctx.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"imageContent": image.Content,
-		"imageName":    image.Name,
-	})
-}
-
 func (c *AuthorsController) DeleteAuthorImage(ctx *gin.Context) {
 	imageName := ctx.Query("img-name")
 	if imageName == "" {
@@ -80,5 +54,43 @@ func (c *AuthorsController) DeleteAuthorImage(ctx *gin.Context) {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+	ctx.JSON(http.StatusOK, gin.H{})
+}
+
+func (c *AuthorsController) RetrieveObjectKey(ctx *gin.Context) {
+	img := ctx.Query("img")
+	if img == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must have img parameter to retrieve key"})
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("img parameter not specified"))
+		return
+	}
+
+	key, err := c.Service.GetObjectKey(img)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Object with name %v not found", img)})
+		ctx.AbortWithError(http.StatusNotFound, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"key": key})
+}
+
+func (c *AuthorsController) ReplaceAuthorImage(ctx *gin.Context) {
+	var request replaceImageRequest
+
+	err := ctx.ShouldBindJSON(&request)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	err = c.Service.ReplaceImage(request.OriginalImageName, request.NewImageName, request.NewImageContent)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update image"})
+		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to update image: %v", err))
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{})
 }
