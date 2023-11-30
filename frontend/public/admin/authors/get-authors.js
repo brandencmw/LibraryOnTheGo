@@ -2,25 +2,28 @@ async function getAuthors() {
     const url = "https://localhost:8080/authors?includeimages=false"
 
     let response = await fetch(url, {method: "GET"})
-    if (response.status != 200) {
-        throw new Error("There was a problem fetching from the server")
-    }
     let json = await response.json()
+    if (response.status != 200) {
+        throw new Error(json.error)
+    }
     console.log(json)
     return json.authors
 }
 
 async function deleteAuthor(id) {
+    console.log(id)
     const url = "https://localhost:8080/authors/auth/delete?id="+id
     options = {
         method: "DELETE",
         credentials: "include",
-        body: JSON.stringify({"id": parseInt(id)})
+        body: JSON.stringify({})
     }
     let response = await fetch(url, options)
+    console.log(response)
     if (response.status != 200) {
         throw new Error(`Failed to delete author with ID ${id}`)
     }
+    return response.json()
 }
 
 function insertRowContent(row, author) {
@@ -41,7 +44,11 @@ function insertRowContent(row, author) {
     deleteButton.addEventListener("click", event => {
         let buttonID = event.target.id
         let authorID = buttonID.split("-")[1]
-        deleteAuthor(authorID)
+        deleteAuthor(authorID).catch(err => {
+            console.log(err)
+        }).then(res => {
+            console.log(res)
+        })
     })
 
     let updateButton = document.createElement("button")

@@ -1,5 +1,4 @@
 async function sendDataToBackend(formData, endpoint, method) {
-    console.log("SENDING DATA")
     url = "https://localhost:8080" + endpoint
     const options = {
         method: method,

@@ -50,7 +50,7 @@ updateAuthorForm.addEventListener("submit", event => {
     const headshot = document.getElementById("authorHeadshot")
     let fields = 0
 
-    let urlParams = new URLSearchParams(window.location.href)
+    let urlParams = new URLSearchParams(window.location.search)
     formData.append("id", urlParams.get("id"))
 
     if (headshot.files.length > 0) {
