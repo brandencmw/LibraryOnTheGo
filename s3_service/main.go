@@ -15,21 +15,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func setupAuthorsController(client *s3.Client) *controllers.AuthorsController {
-	return controllers.NewAuthorsControlller(
-		services.NewBucketService("library-pictures", "authors", client),
-	)
-}
-
-func setupAuthorRoutes(router *gin.Engine, client *s3.Client) {
-	controller := setupAuthorsController(client)
-	routes.AttachAuthorRoutes(router, controller)
+func setupRoutes(router *gin.Engine, client *s3.Client) {
+	authorsController := controllers.NewBucketController("library-pictures", services.NewBucketService("authors", client))
+	booksController := controllers.NewBucketController("library-pictures", services.NewBucketService("books", client))
+	routes.AttachAuthorRoutes(router, authorsController)
+	routes.AttachBookRoutes(router, booksController)
 }
 
 func setupRouter(client *s3.Client) *gin.Engine {
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
-	setupAuthorRoutes(router, client)
+	setupRoutes(router, client)
 	return router
 }
 
