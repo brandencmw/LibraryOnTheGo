@@ -14,11 +14,11 @@ type updateAuthorRequest struct {
 	FirstName *string               `form:"firstName"`
 	LastName  *string               `form:"lastName"`
 	Bio       *string               `form:"bio"`
-	ID        *uint                 `form:"id"`
+	ID        *string               `form:"id"`
 }
 
 type getAuthorResponse struct {
-	ID        uint   `json:"id" binding:"required"`
+	ID        string `json:"id" binding:"required"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Bio       string `json:"bio"`

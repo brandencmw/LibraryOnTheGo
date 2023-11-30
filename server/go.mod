@@ -5,6 +5,7 @@ go 1.21.3
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/google/uuid v1.4.0
 	github.com/jackc/pgx/v5 v5.4.3
 	gorm.io/driver/postgres v1.5.2
 	gorm.io/gorm v1.25.2
