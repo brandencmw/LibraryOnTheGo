@@ -190,7 +190,6 @@ func (r *PostgresAuthorRepository) UpdateAuthor(ctx context.Context, author *Aut
 }
 
 func (r *PostgresAuthorRepository) DeleteAuthor(ctx context.Context, ID string, commitChan chan bool) error {
-	a := Author{}
 	intID, err := strconv.ParseUint(ID, 10, 64)
 	if err != nil {
 		return err
@@ -201,8 +200,7 @@ func (r *PostgresAuthorRepository) DeleteAuthor(ctx context.Context, ID string, 
 		return err
 	}
 
-	row := tx.QueryRow(ctx, "DELETE FROM authors WHERE id=$1", intID)
-	err = row.Scan(&a.FirstName, &a.LastName)
+	_, err = tx.Exec(ctx, "DELETE FROM authors WHERE id=$1", intID)
 	if err != nil {
 		return err
 	}

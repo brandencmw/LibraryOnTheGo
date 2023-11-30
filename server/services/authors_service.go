@@ -129,6 +129,8 @@ func NewAuthorsService(imageRepo ImageRepository, dataRepo AuthorRepository) *Au
 // AddAuthor adds an author to the system, storing the image in its associated image
 // repository and the other fields in its data repository
 func (s *AuthorsService) AddAuthor(parent context.Context, a author) error {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 	errChan := make(chan error, 2) // Collects errors from goroutines
 	commitChan := make(chan bool)  // Signals to data store that it does/does not need to rollback operation
 	var wg sync.WaitGroup
@@ -138,7 +140,11 @@ func (s *AuthorsService) AddAuthor(parent context.Context, a author) error {
 	go func() {
 		defer wg.Done()
 		newAuthor := data.NewAuthor(data.WithFirstName(*a.FirstName), data.WithLastName(*a.LastName), data.WithBio(*a.Bio))
-		errChan <- s.DataRepo.CreateAuthor(parent, newAuthor, commitChan)
+		err := s.DataRepo.CreateAuthor(ctx, newAuthor, commitChan)
+		if err != nil {
+			errChan <- err
+			cancel()
+		}
 	}()
 
 	wg.Add(1)
@@ -147,7 +153,7 @@ func (s *AuthorsService) AddAuthor(parent context.Context, a author) error {
 		defer wg.Done()
 		defer close(commitChan) // This is the only routine that writes to the channel so we can close it when it is done
 		imageName := files.CreateFriendlyFileName(a.Headshot.Name, *a.FirstName, *a.LastName)
-		if err := s.ImageRepo.AddImage(parent, data.AddImageJSON{ImageName: imageName, Image: a.Headshot.Content}); err != nil {
+		if err := s.ImageRepo.AddImage(ctx, data.AddImageJSON{ImageName: imageName, Image: a.Headshot.Content}); err != nil {
 			errChan <- err
 			commitChan <- false
 		} else {
@@ -191,7 +197,7 @@ func (s *AuthorsService) GetAllAuthors(parent context.Context, includeImages boo
 		return nil, err
 	}
 
-	authors := make([]*AuthorOutput, 0)
+	authors := make([]*AuthorOutput, 0, len(authorData))
 	for _, author := range authorData {
 		ao := &AuthorOutput{
 			ID:        *author.ID,
@@ -245,12 +251,16 @@ func (s *AuthorsService) GetAuthor(parent context.Context, ID string, includeIma
 	return ao, nil
 }
 
+// DeleteAuthor deletes data for one author associated with the given ID including the base data and image. The deletion of base
+// data and image are deleted in parallel to speed up the operation
 func (s *AuthorsService) DeleteAuthor(parent context.Context, ID string) error {
 	author, err := s.DataRepo.GetAuthor(parent, ID)
 	if err != nil {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 	errChan := make(chan error, 2)
 	commitChan := make(chan bool)
 
@@ -258,7 +268,11 @@ func (s *AuthorsService) DeleteAuthor(parent context.Context, ID string) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errChan <- s.DataRepo.DeleteAuthor(parent, ID, commitChan)
+		err := s.DataRepo.DeleteAuthor(ctx, ID, commitChan)
+		if err != nil {
+			errChan <- err
+			cancel()
+		}
 	}()
 
 	wg.Add(1)
@@ -266,7 +280,7 @@ func (s *AuthorsService) DeleteAuthor(parent context.Context, ID string) error {
 		defer wg.Done()
 		defer close(commitChan)
 		imageName := files.CreateFriendlyFileName("", *author.FirstName, *author.LastName)
-		if err := s.ImageRepo.DeleteImage(parent, imageName); err != nil {
+		if err := s.ImageRepo.DeleteImage(ctx, imageName); err != nil {
 			errChan <- err
 			commitChan <- false
 		} else {
@@ -287,7 +301,7 @@ func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a autho
 		return err
 	}
 
-	updatedAuthor := &data.Author{
+	updateAuthorData := &data.Author{
 		ID:        &ID,
 		FirstName: a.FirstName,
 		LastName:  a.LastName,
@@ -295,12 +309,14 @@ func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a autho
 	}
 
 	commitChan := make(chan bool, 1)
+	defer close(commitChan)
 	errChan := make(chan error, 2)
 
 	// If any of these fields have changed then the image needs to be updated with
 	// a new title or new content
 	if a.FirstName != nil || a.LastName != nil || a.Headshot != nil {
-
+		ctx, cancel := context.WithCancel(parent)
+		defer cancel()
 		originalFilename := files.CreateFriendlyFileName("", *originalAuthor.FirstName, *originalAuthor.LastName)
 		updatedHeadshot := data.UpdateImageJSON{OriginalName: originalFilename}
 
@@ -315,15 +331,25 @@ func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a autho
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				errChan <- s.DataRepo.UpdateAuthor(parent, updatedAuthor, commitChan)
+				err := s.DataRepo.UpdateAuthor(ctx, updateAuthorData, commitChan)
+				if err != nil {
+					errChan <- err
+					cancel()
+				}
 			}()
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			updatedHeadshot.NewName = files.CreateFriendlyFileName(updatedHeadshot.NewName, *updatedAuthor.FirstName, *updatedAuthor.LastName)
-			err := s.ImageRepo.ReplaceImage(parent, updatedHeadshot)
+			if updateAuthorData.FirstName == nil {
+				updateAuthorData.FirstName = originalAuthor.FirstName
+			}
+			if updateAuthorData.LastName == nil {
+				updateAuthorData.LastName = originalAuthor.LastName
+			}
+			updatedHeadshot.NewName = files.CreateFriendlyFileName(updatedHeadshot.NewName, *updateAuthorData.FirstName, *updateAuthorData.LastName)
+			err := s.ImageRepo.ReplaceImage(ctx, updatedHeadshot)
 			if err != nil {
 				errChan <- err
 				commitChan <- false
@@ -331,11 +357,11 @@ func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a autho
 				commitChan <- true
 			}
 		}()
-
+		wg.Wait()
+		close(errChan)
+		return collectErrors(errChan)
 	} else {
 		commitChan <- true
-		return s.DataRepo.UpdateAuthor(parent, updatedAuthor, commitChan)
-
+		return s.DataRepo.UpdateAuthor(parent, updateAuthorData, commitChan)
 	}
-	return nil
 }
