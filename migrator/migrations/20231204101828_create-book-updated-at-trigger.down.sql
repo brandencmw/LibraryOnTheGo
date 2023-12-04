@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS update_book_updated_at ON books;
