@@ -31,7 +31,13 @@ func (c *BucketController) UploadImage(ctx *gin.Context) {
 		return
 	}
 
-	err = c.Service.UploadImage(ctx, c.Bucket, request.ImageName, request.Image)
+	directory := ctx.Param("directory")
+	uploadPath := services.ObjectPath{
+		Bucket:     c.Bucket,
+		Directory:  directory,
+		ObjectName: request.ImageName,
+	}
+	err = c.Service.UploadImage(ctx, uploadPath, request.Image)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload image", "uploaded": false})
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to upload author image: %v", err.Error()))
@@ -50,7 +56,14 @@ func (c *BucketController) DeleteImage(ctx *gin.Context) {
 		ctx.AbortWithError(http.StatusBadRequest, errors.New("img-name param not provided"))
 		return
 	}
-	err := c.Service.DeleteImage(ctx, c.Bucket, imageName)
+
+	directory := ctx.Param("directory")
+	deletePath := services.ObjectPath{
+		Bucket:     c.Bucket,
+		Directory:  directory,
+		ObjectName: imageName,
+	}
+	err := c.Service.DeleteImage(ctx, deletePath)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		ctx.AbortWithError(http.StatusInternalServerError, err)
@@ -67,7 +80,13 @@ func (c *BucketController) RetrieveObjectKey(ctx *gin.Context) {
 		return
 	}
 
-	key, err := c.Service.GetObjectKey(ctx, c.Bucket, img)
+	directory := ctx.Param("directory")
+	retrievePath := services.ObjectPath{
+		Bucket:     c.Bucket,
+		Directory:  directory,
+		ObjectName: img,
+	}
+	key, err := c.Service.GetObjectKey(ctx, retrievePath)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Object with name %v not found", img)})
 		ctx.AbortWithError(http.StatusNotFound, err)
@@ -87,7 +106,13 @@ func (c *BucketController) ReplaceImage(ctx *gin.Context) {
 		return
 	}
 
-	err = c.Service.ReplaceImage(ctx, c.Bucket, request.OriginalImageName, request.NewImageName, request.NewImageContent)
+	directory := ctx.Param("directory")
+	replacePath := services.ObjectPath{
+		Bucket:     c.Bucket,
+		Directory:  directory,
+		ObjectName: request.OriginalImageName,
+	}
+	err = c.Service.ReplaceImage(ctx, replacePath, request.NewImageName, request.NewImageContent)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update image"})
 		ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("Failed to update image: %v", err))

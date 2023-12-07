@@ -23,8 +23,13 @@ func (e *ObjectNotFoundErr) Error() string {
 }
 
 type BucketService struct {
-	Directory string
-	Client    *s3.Client
+	Client *s3.Client
+}
+
+type ObjectPath struct {
+	Bucket     string
+	Directory  string
+	ObjectName string
 }
 
 type Image struct {
@@ -32,17 +37,16 @@ type Image struct {
 	Name    string
 }
 
-func NewBucketService(directory string, client *s3.Client) *BucketService {
+func NewBucketService(client *s3.Client) *BucketService {
 	return &BucketService{
-		Directory: directory,
-		Client:    client,
+		Client: client,
 	}
 }
 
-func (s *BucketService) UploadImage(ctx context.Context, bucket, imageName string, image []byte) error {
-	imageKey := path.Join(s.Directory, imageName)
+func (s *BucketService) UploadImage(ctx context.Context, p ObjectPath, image []byte) error {
+	imageKey := path.Join(p.Directory, p.ObjectName)
 	_, err := s.Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &bucket,
+		Bucket: &p.Bucket,
 		Key:    &imageKey,
 		Body:   bytes.NewReader(image),
 	})
@@ -50,10 +54,10 @@ func (s *BucketService) UploadImage(ctx context.Context, bucket, imageName strin
 	return err
 }
 
-func (s *BucketService) GetObjectKey(ctx context.Context, bucket, imageName string) (string, error) {
+func (s *BucketService) GetObjectKey(ctx context.Context, p ObjectPath) (string, error) {
 
 	input := &s3.GetObjectAttributesInput{
-		Bucket:           &bucket,
+		Bucket:           &p.Bucket,
 		ObjectAttributes: []types.ObjectAttributes{types.ObjectAttributesObjectSize}, // arbitary attribute to determine if object was foun
 	} // otherwise nil is returned by get operation
 
@@ -61,7 +65,7 @@ func (s *BucketService) GetObjectKey(ctx context.Context, bucket, imageName stri
 	var output *s3.GetObjectAttributesOutput
 	var err error
 	for _, ext := range FILE_EXTENSIONS {
-		objectKey = s.Directory + "/" + imageName + "." + ext
+		objectKey = path.Join(p.Directory, p.ObjectName) + "." + ext
 		input.Key = &objectKey
 		output, err = s.Client.GetObjectAttributes(ctx, input)
 		if output != nil && output.ObjectSize != 0 {
@@ -71,12 +75,12 @@ func (s *BucketService) GetObjectKey(ctx context.Context, bucket, imageName stri
 	return objectKey, err
 }
 
-func (s *BucketService) DeleteImage(ctx context.Context, bucket, imageName string) error {
-	objectKey, err := s.GetObjectKey(ctx, bucket, imageName)
+func (s *BucketService) DeleteImage(ctx context.Context, p ObjectPath) error {
+	objectKey, err := s.GetObjectKey(ctx, p)
 	if err != nil {
-		return &ObjectNotFoundErr{bucket: bucket, image: imageName}
+		return &ObjectNotFoundErr{bucket: p.Bucket, image: p.ObjectName}
 	}
-	return deleteOperation(ctx, s.Client, bucket, objectKey)
+	return deleteOperation(ctx, s.Client, p.Bucket, objectKey)
 }
 
 func deleteOperation(ctx context.Context, client *s3.Client, bucket, key string) error {
@@ -93,15 +97,15 @@ func buildNewImageKey(originalKey, newName string) string {
 	return directory + "/" + newName + "." + extension
 }
 
-func (s *BucketService) ReplaceImage(ctx context.Context, bucket, originalImageName, newImageName string, newImage []byte) error {
+func (s *BucketService) ReplaceImage(ctx context.Context, originalLocation ObjectPath, newImageName string, newImage []byte) error {
 
 	// If no changes are needed to name or content, no work is needed
-	if newImage == nil && strings.Compare(originalImageName, newImageName) == 0 {
+	if newImage == nil && strings.Compare(originalLocation.ObjectName, newImageName) == 0 {
 		return nil
 	}
 
 	// Need to get original key of object to copy
-	originalKey, err := s.GetObjectKey(ctx, bucket, originalImageName)
+	originalKey, err := s.GetObjectKey(ctx, originalLocation)
 	if err != nil {
 		return err
 	}
@@ -109,13 +113,18 @@ func (s *BucketService) ReplaceImage(ctx context.Context, bucket, originalImageN
 	// If there is no new image content then just the name needs to be changed which can be done with copy operation
 	if newImage == nil {
 		newKey := buildNewImageKey(originalKey, newImageName) // Since there is no content, the filetype will be the same as the original
-		copySource := bucket + "/" + originalKey
-		_, err = s.Client.CopyObject(ctx, &s3.CopyObjectInput{Bucket: &bucket, CopySource: &copySource, Key: &newKey})
+		copySource := originalLocation.Bucket + "/" + originalKey
+		_, err = s.Client.CopyObject(ctx, &s3.CopyObjectInput{Bucket: &originalLocation.Bucket, CopySource: &copySource, Key: &newKey})
 		if err != nil {
 			return err
 		}
 	} else { // If there is image content then the filetype will already be known
-		err := s.UploadImage(ctx, bucket, newImageName, newImage)
+		newLocation := ObjectPath{
+			Bucket:     originalLocation.Bucket,
+			Directory:  originalLocation.Directory,
+			ObjectName: newImageName,
+		}
+		err := s.UploadImage(ctx, newLocation, newImage)
 		if err != nil {
 			return err
 		}
@@ -123,8 +132,8 @@ func (s *BucketService) ReplaceImage(ctx context.Context, bucket, originalImageN
 
 	// If names were the same then upload would just overwrite the old image
 	// So, if names were not the same then a copy would be made so the original must be removed
-	if strings.Compare(originalImageName, newImageName) != 0 {
-		return deleteOperation(ctx, s.Client, bucket, originalKey)
+	if strings.Compare(originalLocation.ObjectName, newImageName) != 0 {
+		return deleteOperation(ctx, s.Client, originalLocation.Bucket, originalKey)
 	}
 	return nil
 }

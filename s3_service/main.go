@@ -16,10 +16,8 @@ import (
 )
 
 func setupRoutes(router *gin.Engine, client *s3.Client) {
-	authorsController := controllers.NewBucketController("library-pictures", services.NewBucketService("authors", client))
-	booksController := controllers.NewBucketController("library-pictures", services.NewBucketService("books", client))
-	routes.AttachAuthorRoutes(router, authorsController)
-	routes.AttachBookRoutes(router, booksController)
+	bucketController := controllers.NewBucketController("library-pictures", services.NewBucketService(client))
+	routes.AttachBucketRoutes(router, bucketController)
 }
 
 func setupRouter(client *s3.Client) *gin.Engine {

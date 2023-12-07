@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AttachAuthorRoutes(router *gin.Engine, controller *controllers.BucketController) {
-	authorGroup := router.Group("/authors")
+func AttachBucketRoutes(router *gin.Engine, controller *controllers.BucketController) {
+	authorGroup := router.Group("/:directory")
 	{
 		authorGroup.GET("/key", controller.RetrieveObjectKey)
 		authorGroup.POST("/add", controller.UploadImage)
