@@ -55,7 +55,7 @@ func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
 
 	parent, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	if err = c.service.AddAuthor(parent, *author); err != nil {
+	if err = c.service.AddAuthor(parent, author); err != nil {
 		if parent.Err() != nil {
 			ctx.JSON(http.StatusRequestTimeout, gin.H{"error": "Request took too long to respond"})
 		} else {
@@ -232,4 +232,56 @@ func (c *AuthorsController) UpdateAuthor(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, req)
+}
+
+func (c *AuthorsController) SearchAuthors(ctx *gin.Context) {
+	searchParams := services.AuthorSearchParams{}
+	name := ctx.Query("name")
+	if name == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must have name for search"})
+		ctx.AbortWithError(http.StatusBadRequest, errors.New("No name provided for search"))
+		return
+	}
+	searchParams.SearchTerms = name
+	parent, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	fmt.Printf("NAME:%v\n", name)
+
+	maxResults := ctx.Query("maxResults")
+	if maxResults != "" {
+		maxResults, err := strconv.ParseUint(maxResults, 10, 64)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid argument passed for maxResults"})
+			ctx.AbortWithError(http.StatusBadRequest, errors.New("Invalid argument for maxResults"))
+			return
+		}
+		searchParams.MaxResults = uint(maxResults)
+	}
+
+	includeImages := ctx.Query("includeImages")
+	if includeImages != "" {
+		includeImages, err := strconv.ParseBool(includeImages)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid argument passed for includeImages"})
+			ctx.AbortWithError(http.StatusBadRequest, errors.New("Invalid argument for includeImages"))
+			return
+		}
+		searchParams.IncludeImages = includeImages
+	} else {
+		searchParams.IncludeImages = true
+	}
+
+	output, err := c.service.SearchAuthorsByName(parent, searchParams)
+	if err != nil {
+		if parent.Err() != nil {
+			ctx.JSON(http.StatusRequestTimeout, gin.H{"error": "Server took too long to respond"})
+		} else {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Could not find author"})
+			ctx.AbortWithError(http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"authors": output})
 }

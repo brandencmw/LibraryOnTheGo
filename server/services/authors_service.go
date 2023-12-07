@@ -15,6 +15,7 @@ type AuthorRepository interface {
 	GetAllAuthors(ctx context.Context) ([]*data.Author, error)
 	UpdateAuthor(ctx context.Context, author *data.Author, commit chan bool) error
 	DeleteAuthor(ctx context.Context, ID string, commit chan bool) error
+	SearchByName(ctx context.Context, name string, maxResults uint) ([]*data.Author, error)
 }
 
 // ImageRepository will allow the service to perform operations on an image associated with a particular author
@@ -29,6 +30,13 @@ type ImageRepository interface {
 type Image struct {
 	Content []byte
 	Name    string
+}
+
+// AuthorSearchParams represents information that can be used in search queries for authors
+type AuthorSearchParams struct {
+	MaxResults    uint
+	SearchTerms   string
+	IncludeImages bool
 }
 
 // author represents all of an author's possible input fields to the
@@ -128,7 +136,7 @@ func NewAuthorsService(imageRepo ImageRepository, dataRepo AuthorRepository) *Au
 
 // AddAuthor adds an author to the system, storing the image in its associated image
 // repository and the other fields in its data repository
-func (s *AuthorsService) AddAuthor(parent context.Context, a author) error {
+func (s *AuthorsService) AddAuthor(parent context.Context, a *author) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	errChan := make(chan error, 2) // Collects errors from goroutines
@@ -192,39 +200,28 @@ func collectErrors(errChan chan error) error {
 // may be several hundred bytes making the whole structure several KB or more so making copies would be a memory intensive
 // operation
 func (s *AuthorsService) GetAllAuthors(parent context.Context, includeImages bool) ([]*AuthorOutput, error) {
-	authorData, err := s.DataRepo.GetAllAuthors(parent)
+	dataAuthors, err := s.DataRepo.GetAllAuthors(parent)
 	if err != nil {
 		return nil, err
 	}
 
-	authors := make([]*AuthorOutput, 0, len(authorData))
-	for _, author := range authorData {
-		ao := &AuthorOutput{
-			ID:        *author.ID,
-			FirstName: *author.FirstName,
-			LastName:  *author.LastName,
-			Bio:       *author.Bio,
-		}
+	authors := make([]*AuthorOutput, 0, len(dataAuthors))
+	var wg sync.WaitGroup
+	errs := make([]error, 0, len(authors))
+	for _, author := range dataAuthors {
+		ao := &AuthorOutput{ID: *author.ID, FirstName: *author.FirstName, LastName: *author.LastName, Bio: *author.Bio}
 		authors = append(authors, ao)
-	}
-
-	if includeImages {
-		var wg sync.WaitGroup
-		errChan := make(chan error, len(authors))
-		for _, author := range authors {
+		if includeImages {
 			wg.Add(1)
-			// Need to explicitly pass author as calling getHeadshotObjectKey with loop variable leads to unexpected results
 			go func(author *AuthorOutput) {
 				defer wg.Done()
-				errChan <- s.getHeadshotObjectKey(parent, author)
-			}(author)
+				errs = append(errs, s.getHeadshotObjectKey(parent, author))
+			}(ao)
 		}
-		wg.Wait()
-		close(errChan)
-		err = collectErrors(errChan)
 	}
+	wg.Wait()
 
-	return authors, err
+	return authors, errors.Join(errs...)
 }
 
 // GetAuthor retrieves data for one author associated with the provided ID. Retrieving image data may be a time intensive operation
@@ -364,4 +361,30 @@ func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a autho
 		commitChan <- true
 		return s.DataRepo.UpdateAuthor(parent, updateAuthorData, commitChan)
 	}
+}
+
+func (s *AuthorsService) SearchAuthorsByName(parent context.Context, params AuthorSearchParams) ([]*AuthorOutput, error) {
+
+	dataAuthors, err := s.DataRepo.SearchByName(parent, params.SearchTerms, params.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+
+	authors := make([]*AuthorOutput, 0, len(dataAuthors))
+	var wg sync.WaitGroup
+	errs := make([]error, 0, len(dataAuthors))
+	for _, author := range dataAuthors {
+		ao := &AuthorOutput{ID: *author.ID, FirstName: *author.FirstName, LastName: *author.LastName, Bio: *author.Bio}
+		authors = append(authors, ao)
+		if params.IncludeImages {
+			wg.Add(1)
+			go func(author *AuthorOutput) {
+				defer wg.Done()
+				errs = append(errs, s.getHeadshotObjectKey(parent, ao))
+			}(ao)
+		}
+	}
+	wg.Wait()
+
+	return authors, errors.Join(errs...)
 }

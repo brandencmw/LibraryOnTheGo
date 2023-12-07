@@ -6,7 +6,7 @@ import (
 )
 
 func CreateFriendlyFileName(baseFileName string, friendlyNamePieces ...string) string {
-	fileName := strings.Join(friendlyNamePieces, "-")
+	fileName := strings.ReplaceAll(strings.ToLower(strings.Join(friendlyNamePieces, "-")), " ", "-")
 	fileExtension := GetFileExtension(baseFileName)
 	return fileName + fileExtension
 }

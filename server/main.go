@@ -25,9 +25,23 @@ func createAuthorController(client *http.Client, connPool *pgxpool.Pool) *contro
 	)
 }
 
+func createBooksController(client *http.Client, connPool *pgxpool.Pool) *controllers.BooksController {
+	return controllers.NewBooksController(
+		services.NewBooksService(
+			data.NewS3ImageRepository(client, "https://s3_service/books"),
+			data.NewPostgresBookRespository(connPool),
+		),
+	)
+}
+
 func setupAuthorRoutes(router *gin.Engine, client *http.Client, connPool *pgxpool.Pool) {
 	controller := createAuthorController(client, connPool)
 	routes.AttachAuthorRoutes(router, controller)
+}
+
+func setupBookRoutes(router *gin.Engine, client *http.Client, connPool *pgxpool.Pool) {
+	controller := createBooksController(client, connPool)
+	routes.AttachBookRoutes(router, controller)
 }
 
 func setupRouter(client *http.Client, connPool *pgxpool.Pool) *gin.Engine {
@@ -35,6 +49,7 @@ func setupRouter(client *http.Client, connPool *pgxpool.Pool) *gin.Engine {
 	router.Use(middleware.CORSMiddleware())
 	routes.AttachAuthorizationRoutes(router)
 	setupAuthorRoutes(router, client, connPool)
+	setupBookRoutes(router, client, connPool)
 	return router
 }
 
@@ -104,6 +119,12 @@ func main() {
 	serverTLS, err := setupServerTLS()
 	if err != nil {
 		log.Fatalf("Failed to initialize TLS: %v", err.Error())
+	}
+
+	serverTLS.GetConfigForClient = func(chi *tls.ClientHelloInfo) (*tls.Config, error) {
+		fmt.Println(chi.CipherSuites)
+		fmt.Println(chi.ServerName)
+		return nil, nil
 	}
 
 	server := createServer(":443", serverTLS, router)

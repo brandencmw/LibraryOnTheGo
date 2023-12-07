@@ -52,11 +52,6 @@ func NewAuthor(options ...AuthorOption) *Author {
 	return author
 }
 
-type AuthorWithErr struct {
-	Author
-	Err error
-}
-
 type PostgresAuthorRepository struct {
 	connPool *pgxpool.Pool
 }
@@ -214,4 +209,35 @@ func (r *PostgresAuthorRepository) DeleteAuthor(ctx context.Context, ID string, 
 		}
 	}
 	return nil
+}
+
+func (r *PostgresAuthorRepository) SearchByName(ctx context.Context, name string, maxResults uint) ([]*Author, error) {
+	conn, err := r.connPool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+
+	baseQuery := "SELECT id, first_name, last_name, bio FROM authors WHERE name_search_vector @@ plainto_tsquery('english', $1)"
+	var rows pgx.Rows
+	if maxResults > 0 {
+		rows, err = conn.Query(ctx, baseQuery+" LIMIT $2;", name, maxResults)
+	} else {
+		rows, err = conn.Query(ctx, baseQuery+";", name)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var rowID uint
+	var rowFirstName, rowLastName, rowBio string
+	authors := make([]*Author, 0)
+	for rows.Next() {
+		err := rows.Scan(&rowID, &rowFirstName, &rowLastName, &rowBio)
+		if err != nil {
+			return authors, err
+		}
+		authors = append(authors, NewAuthor(WithID(fmt.Sprint(rowID)), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
+	}
+	return authors, nil
 }

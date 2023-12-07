@@ -23,7 +23,7 @@ func UseTLSVersion(version uint16) tlsOptionFunction {
 	}
 }
 
-func useMutualTLS(config *tls.Config) error {
+func UseMutualTLS(config *tls.Config) error {
 	config.ClientCAs = config.RootCAs
 	config.ClientAuth = tls.RequireAndVerifyClientCert
 	return nil

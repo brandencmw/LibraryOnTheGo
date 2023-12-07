@@ -11,6 +11,7 @@ func AttachAuthorRoutes(router *gin.Engine, controller *controllers.AuthorsContr
 	authorGroup := router.Group("/authors")
 	{
 		authorGroup.GET("", controller.GetAuthor)
+		authorGroup.GET("/search", controller.SearchAuthors)
 	}
 
 	protectedAuthorGroup := authorGroup.Group("/auth", middleware.AuthMiddleware)
