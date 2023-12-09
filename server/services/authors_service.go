@@ -46,7 +46,7 @@ type AuthorSearchParams struct {
 // of fields can be specified for updating author.
 // Important to distinguish difference between empty string provided
 // and no value provided.
-type author struct {
+type Author struct {
 	FirstName *string
 	LastName  *string
 	Bio       *string
@@ -54,11 +54,11 @@ type author struct {
 }
 
 // AuthorOption defines a function that modifies part of the author struct and could fail
-type AuthorOption func(author *author) error
+type AuthorOption func(author *Author) error
 
 // WithLastName adds a last name field to the given author as an option function
 func WithFirstName(fName string) AuthorOption {
-	return func(author *author) error {
+	return func(author *Author) error {
 		author.FirstName = &fName
 		return nil
 	}
@@ -66,7 +66,7 @@ func WithFirstName(fName string) AuthorOption {
 
 // WithLastName adds a last name field to the given author as an option function
 func WithLastName(lName string) AuthorOption {
-	return func(author *author) error {
+	return func(author *Author) error {
 		author.LastName = &lName
 		return nil
 	}
@@ -74,7 +74,7 @@ func WithLastName(lName string) AuthorOption {
 
 // WithImage adds a bio field to the given author as an option function
 func WithBio(bio string) AuthorOption {
-	return func(author *author) error {
+	return func(author *Author) error {
 		author.Bio = &bio
 		return nil
 	}
@@ -82,7 +82,7 @@ func WithBio(bio string) AuthorOption {
 
 // WithImage adds an image struct to the given author as an option function
 func WithImage(img *Image) AuthorOption {
-	return func(author *author) error {
+	return func(author *Author) error {
 		if img.Name == "" {
 			return errors.New("Image must have a name")
 		} else if len(img.Content) == 0 {
@@ -96,8 +96,8 @@ func WithImage(img *Image) AuthorOption {
 // NewAuthor creates a new author object using the functional options pattern and returns
 // a reference to the author which may be partially completed if an error occurs part way
 // through handling the options
-func NewAuthor(options ...AuthorOption) (*author, error) {
-	author := &author{}
+func NewAuthor(options ...AuthorOption) (*Author, error) {
+	author := &Author{}
 	for _, option := range options {
 		err := option(author)
 		if err != nil { // Return partially built author if error is encountered
@@ -136,7 +136,7 @@ func NewAuthorsService(imageRepo ImageRepository, dataRepo AuthorRepository) *Au
 
 // AddAuthor adds an author to the system, storing the image in its associated image
 // repository and the other fields in its data repository
-func (s *AuthorsService) AddAuthor(parent context.Context, a *author) error {
+func (s *AuthorsService) AddAuthor(parent context.Context, a *Author) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	errChan := make(chan error, 2) // Collects errors from goroutines
@@ -147,7 +147,7 @@ func (s *AuthorsService) AddAuthor(parent context.Context, a *author) error {
 	// This go routine adds new author data to the data store and may return an error to the channel
 	go func() {
 		defer wg.Done()
-		newAuthor := data.NewAuthor(data.WithFirstName(*a.FirstName), data.WithLastName(*a.LastName), data.WithBio(*a.Bio))
+		newAuthor := serviceAuthorToDataAuthor(a)
 		err := s.DataRepo.CreateAuthor(ctx, newAuthor, commitChan)
 		if err != nil {
 			errChan <- err
@@ -195,6 +195,37 @@ func collectErrors(errChan chan error) error {
 	return errors.Join(errs...)
 }
 
+func dataAuthorToServiceAuthor(dataAuthor *data.Author) *AuthorOutput {
+	ao := &AuthorOutput{}
+	if dataAuthor.ID != nil {
+		ao.ID = *dataAuthor.ID
+	}
+	if dataAuthor.FirstName != nil {
+		ao.FirstName = *dataAuthor.FirstName
+	}
+	if dataAuthor.LastName != nil {
+		ao.LastName = *dataAuthor.LastName
+	}
+	if dataAuthor.Bio != nil {
+		ao.Bio = *dataAuthor.Bio
+	}
+	return ao
+}
+
+func serviceAuthorToDataAuthor(serviceAuthor *Author) *data.Author {
+	var options []data.AuthorOption
+	if serviceAuthor.FirstName != nil {
+		options = append(options, data.WithFirstName(*serviceAuthor.FirstName))
+	}
+	if serviceAuthor.LastName != nil {
+		options = append(options, data.WithLastName(*serviceAuthor.LastName))
+	}
+	if serviceAuthor.Bio != nil {
+		options = append(options, data.WithBio(*serviceAuthor.Bio))
+	}
+	return data.NewAuthor(options...)
+}
+
 // GetAllAuthors retrieves information for every author in the system. Since retrieving image data may be an intensive task
 // it can be skipped by the includeImages flag being set to false. Returns a list of pointers to output objects as the objects
 // may be several hundred bytes making the whole structure several KB or more so making copies would be a memory intensive
@@ -207,9 +238,9 @@ func (s *AuthorsService) GetAllAuthors(parent context.Context, includeImages boo
 
 	authors := make([]*AuthorOutput, 0, len(dataAuthors))
 	var wg sync.WaitGroup
-	errs := make([]error, 0, len(authors))
+	errs := make([]error, 0, len(dataAuthors))
 	for _, author := range dataAuthors {
-		ao := &AuthorOutput{ID: *author.ID, FirstName: *author.FirstName, LastName: *author.LastName, Bio: *author.Bio}
+		ao := dataAuthorToServiceAuthor(author)
 		authors = append(authors, ao)
 		if includeImages {
 			wg.Add(1)
@@ -226,23 +257,18 @@ func (s *AuthorsService) GetAllAuthors(parent context.Context, includeImages boo
 
 // GetAuthor retrieves data for one author associated with the provided ID. Retrieving image data may be a time intensive operation
 // so there is the option to skip retrieving the image if necessary
-func (s *AuthorsService) GetAuthor(parent context.Context, ID string, includeImage bool) (AuthorOutput, error) {
+func (s *AuthorsService) GetAuthor(parent context.Context, ID string, includeImage bool) (*AuthorOutput, error) {
 	author, err := s.DataRepo.GetAuthor(parent, ID)
 	if err != nil {
-		return AuthorOutput{}, err
+		return nil, err
 	}
 
-	ao := AuthorOutput{
-		ID:        ID,
-		FirstName: *author.FirstName,
-		LastName:  *author.LastName,
-		Bio:       *author.Bio,
-	}
+	ao := dataAuthorToServiceAuthor(author)
 
 	if includeImage {
-		err = s.getHeadshotObjectKey(parent, &ao)
+		err = s.getHeadshotObjectKey(parent, ao)
 		if err != nil {
-			return AuthorOutput{}, err
+			return nil, err
 		}
 	}
 	return ao, nil
@@ -292,18 +318,14 @@ func (s *AuthorsService) DeleteAuthor(parent context.Context, ID string) error {
 	return err
 }
 
-func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a author) error {
+func (s *AuthorsService) UpdateAuthor(parent context.Context, ID string, a Author) error {
 	originalAuthor, err := s.DataRepo.GetAuthor(parent, ID)
 	if err != nil {
 		return err
 	}
 
-	updateAuthorData := &data.Author{
-		ID:        &ID,
-		FirstName: a.FirstName,
-		LastName:  a.LastName,
-		Bio:       a.Bio,
-	}
+	updateAuthorData := serviceAuthorToDataAuthor(&a)
+	updateAuthorData.ID = &ID
 
 	commitChan := make(chan bool, 1)
 	defer close(commitChan)

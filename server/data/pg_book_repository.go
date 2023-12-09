@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,18 +11,70 @@ import (
 )
 
 type Book struct {
-	BookID        *string
-	Title         *string
-	PublishDate   *time.Time
-	PageCount     *int
-	Synopsis      *string
-	AuthorNames   []string
-	CategoryNames []string
+	ID          *string
+	Title       *string
+	PublishDate *time.Time
+	PageCount   *int
+	Synopsis    *string
+	Authors     []*Author
+	Categories  []string
+}
+
+type BookOption func(book *Book)
+
+func WithBookID(ID string) BookOption {
+	return func(book *Book) {
+		book.ID = &ID
+	}
+}
+
+func WithTitle(title string) BookOption {
+	return func(book *Book) {
+		book.Title = &title
+	}
+}
+
+func WithPublishDate(date time.Time) BookOption {
+	return func(book *Book) {
+		book.PublishDate = &date
+	}
+}
+
+func WithPageCount(count int) BookOption {
+	return func(book *Book) {
+		book.PageCount = &count
+	}
+}
+
+func WithSynopsis(synopsis string) BookOption {
+	return func(book *Book) {
+		book.Synopsis = &synopsis
+	}
+}
+
+func WithAuthors(authors []*Author) BookOption {
+	return func(book *Book) {
+		book.Authors = authors
+	}
+}
+
+func WithCategories(categories []string) BookOption {
+	return func(book *Book) {
+		book.Categories = categories
+	}
+}
+
+func NewBook(options ...BookOption) *Book {
+	book := &Book{}
+	for _, option := range options {
+		option(book)
+	}
+	return book
 }
 
 type Category struct {
-	CategoryID *string
-	Name       *string
+	ID   *string
+	Name *string
 }
 
 type PostgresBookRepository struct {
@@ -32,6 +85,14 @@ func NewPostgresBookRespository(pool *pgxpool.Pool) *PostgresBookRepository {
 	return &PostgresBookRepository{
 		connPool: pool,
 	}
+}
+
+func extractCategoryNames(categories ...Category) []string {
+	names := make([]string, len(categories))
+	for _, category := range categories {
+		names = append(names, *category.Name)
+	}
+	return names
 }
 
 func createListOfInsertRows(rows ...string) string {
@@ -65,7 +126,7 @@ func (r *PostgresBookRepository) CreateBook(ctx context.Context, b *Book, commit
 	}
 
 	// Insert categories and get IDs
-	categoryRows := createListOfInsertRows(b.CategoryNames...)
+	categoryRows := createListOfInsertRows(b.Categories...)
 	rows, err := tx.Query(ctx,
 		`INSERT INTO categories 
 			(category_name) 
@@ -92,17 +153,24 @@ func (r *PostgresBookRepository) CreateBook(ctx context.Context, b *Book, commit
 		}
 	}
 
-	authorIDs, err := getIDsForBookAuthors(ctx, tx, b.AuthorNames...)
+	fmt.Printf("Authors:%+v\n", b.Authors)
+	names := extractAuthorNames(b.Authors...)
+	fmt.Printf("1:%v\n", names[0])
+	fmt.Printf("Author names: %v\n", names)
+	authorIDs, err := getIDsForBookAuthors(ctx, tx, names...)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("IDs: %v\n", authorIDs)
 
+	fmt.Println("Inserting to book_authors")
 	for _, authorID := range authorIDs {
 		_, err = tx.Exec(ctx, "INSERT INTO book_authors (book_id, author_id) VALUES ($1, $2)", bookID, authorID)
 		if err != nil {
 			return err
 		}
 	}
+	fmt.Println("Inserted to book_authors")
 
 	select {
 	case <-ctx.Done():
@@ -119,6 +187,7 @@ func getIDsForBookAuthors(ctx context.Context, tx pgx.Tx, names ...string) ([]in
 	IDs := make([]int, 0, len(names))
 	var ID int
 	for _, name := range names {
+		fmt.Printf("Looking for author: %v\n", name)
 		row := tx.QueryRow(ctx, "SELECT id FROM authors WHERE name_search_vector @@ plainto_tsquery('english', $1) LIMIT 1", name)
 		err := row.Scan(&ID)
 		if err != nil {
@@ -127,4 +196,49 @@ func getIDsForBookAuthors(ctx context.Context, tx pgx.Tx, names ...string) ([]in
 		IDs = append(IDs, ID)
 	}
 	return IDs, nil
+}
+
+func (r *PostgresBookRepository) GetAllBooks(ctx context.Context) ([]*Book, error) {
+	conn, err := r.connPool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+	rows, err := conn.Query(ctx,
+		`SELECT 
+			b.id, b.title, b.synopsis, b.publish_date, b.page_count, 
+			array_agg(DISTINCT(a.id, a.first_name, a.last_name)) AS authors, 
+			array_agg(c.category_name) AS categories FROM books AS b
+		JOIN book_authors AS ba ON b.id = ba.book_id
+		JOIN authors AS a ON ba.author_id = a.id
+		JOIN book_categories AS bc ON b.id = bc.book_id
+		JOIN categories AS c ON bc.category_id = c.id
+		GROUP BY b.id`,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var rowID, rowPageCount int
+	var rowTitle, rowSynopsis string
+	var rowPublishDate time.Time
+	var rowAuthors []*Author
+	var rowCategories []string
+	var books []*Book
+	for rows.Next() {
+		err = rows.Scan(&rowID, &rowTitle, &rowSynopsis, &rowPublishDate, &rowPageCount, &rowAuthors, &rowCategories)
+		if err != nil {
+			return books, err
+		}
+		books = append(books, NewBook(
+			WithBookID(fmt.Sprint(rowID)),
+			WithTitle(rowTitle),
+			WithSynopsis(rowSynopsis),
+			WithPublishDate(rowPublishDate),
+			WithPageCount(rowPageCount),
+			WithAuthors(rowAuthors),
+			WithCategories(rowCategories),
+		))
+	}
+	return books, nil
 }

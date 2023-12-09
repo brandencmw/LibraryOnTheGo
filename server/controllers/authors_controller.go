@@ -25,8 +25,32 @@ func NewAuthorsController(service *services.AuthorsService) *AuthorsController {
 	}
 }
 
+func authorRequestToServiceAuthor(req authorRequest) (*services.Author, error) {
+	headshot, err := requestImageToServiceImage(*req.Headshot)
+	if err != nil {
+		return nil, err
+	}
+	return services.NewAuthor(
+		services.WithFirstName(*req.FirstName),
+		services.WithLastName(*req.LastName),
+		services.WithBio(*req.Bio),
+		services.WithImage(headshot),
+	)
+}
+
+func serviceAuthorToAuthorResponse(author *services.AuthorOutput) authorResponse {
+	fmt.Printf("Service author: %v\n", author)
+	return authorResponse{
+		ID:        author.ID,
+		FirstName: author.FirstName,
+		LastName:  author.LastName,
+		Bio:       author.Bio,
+		Headshot:  author.HeadshotObjectKey,
+	}
+}
+
 func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
-	var req addAuthorRequest
+	var req authorRequest
 
 	if err := ctx.ShouldBind(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
@@ -34,19 +58,7 @@ func (c *AuthorsController) AddAuthor(ctx *gin.Context) {
 		return
 	}
 
-	imageContent, err := files.GetMultipartFormContents(req.Headshot)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file contents"})
-		ctx.AbortWithError(http.StatusBadRequest, err)
-		return
-	}
-
-	author, err := services.NewAuthor(
-		services.WithFirstName(req.FirstName),
-		services.WithLastName(req.LastName),
-		services.WithBio(req.Bio),
-		services.WithImage(&services.Image{Name: req.Headshot.Filename, Content: imageContent}),
-	)
+	author, err := authorRequestToServiceAuthor(req)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create author"})
 		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to create author: %v", err))
@@ -106,15 +118,9 @@ func (c *AuthorsController) getAllAuthors(ctx *gin.Context, includeImages bool) 
 		return
 	}
 
-	authorJSON := make([]getAuthorResponse, 0)
+	authorJSON := make([]authorResponse, 0)
 	for _, author := range authors {
-		authorJSON = append(authorJSON, getAuthorResponse{
-			ID:        author.ID,
-			FirstName: author.FirstName,
-			LastName:  author.LastName,
-			Bio:       author.Bio,
-			Headshot:  author.HeadshotObjectKey,
-		})
+		authorJSON = append(authorJSON, serviceAuthorToAuthorResponse(author))
 	}
 	ctx.JSON(http.StatusOK, gin.H{"authors": authorJSON})
 }
@@ -134,13 +140,7 @@ func (c *AuthorsController) getAuthorByID(ctx *gin.Context, ID string, includeIm
 		return
 	}
 
-	resp := getAuthorResponse{
-		ID:        author.ID,
-		FirstName: author.FirstName,
-		LastName:  author.LastName,
-		Bio:       author.Bio,
-		Headshot:  author.HeadshotObjectKey,
-	}
+	resp := serviceAuthorToAuthorResponse(author)
 	ctx.JSON(http.StatusOK, gin.H{"author": resp})
 }
 
@@ -169,7 +169,7 @@ func (c *AuthorsController) DeleteAuthor(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
-func collectUpdateAuthorOptions(req updateAuthorRequest) ([]services.AuthorOption, error) {
+func collectUpdateAuthorOptions(req authorRequest) ([]services.AuthorOption, error) {
 	options := make([]services.AuthorOption, 0)
 	if req.FirstName != nil {
 		options = append(options, services.WithFirstName(*req.FirstName))
@@ -191,7 +191,7 @@ func collectUpdateAuthorOptions(req updateAuthorRequest) ([]services.AuthorOptio
 }
 
 func (c *AuthorsController) UpdateAuthor(ctx *gin.Context) {
-	var req updateAuthorRequest
+	var req authorRequest
 	ctx.ShouldBind(&req)
 	if req.ID == nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must provide ID of author to update"})
@@ -245,8 +245,6 @@ func (c *AuthorsController) SearchAuthors(ctx *gin.Context) {
 	searchParams.SearchTerms = name
 	parent, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-
-	fmt.Printf("NAME:%v\n", name)
 
 	maxResults := ctx.Query("maxResults")
 	if maxResults != "" {

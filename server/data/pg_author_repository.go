@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,7 +21,7 @@ type Author struct {
 
 type AuthorOption func(author *Author)
 
-func WithID(ID string) AuthorOption {
+func WithAuthorID(ID string) AuthorOption {
 	return func(author *Author) {
 		author.ID = &ID
 	}
@@ -143,7 +144,7 @@ func (r *PostgresAuthorRepository) GetAllAuthors(ctx context.Context) ([]*Author
 		if err != nil {
 			return authors, err
 		}
-		authors = append(authors, NewAuthor(WithID(fmt.Sprint(rowID)), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
+		authors = append(authors, NewAuthor(WithAuthorID(fmt.Sprint(rowID)), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
 	}
 	return authors, nil
 }
@@ -237,7 +238,15 @@ func (r *PostgresAuthorRepository) SearchByName(ctx context.Context, name string
 		if err != nil {
 			return authors, err
 		}
-		authors = append(authors, NewAuthor(WithID(fmt.Sprint(rowID)), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
+		authors = append(authors, NewAuthor(WithAuthorID(fmt.Sprint(rowID)), WithFirstName(rowFirstName), WithLastName(rowLastName), WithBio(rowBio)))
 	}
 	return authors, nil
+}
+
+func extractAuthorNames(authors ...*Author) []string {
+	names := make([]string, 0, len(authors))
+	for _, author := range authors {
+		names = append(names, strings.Join([]string{*author.FirstName, *author.LastName}, " "))
+	}
+	return names
 }
