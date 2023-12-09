@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"libraryonthego/server/files"
 	"libraryonthego/server/services"
 	"net/http"
 	"strconv"
@@ -26,16 +25,14 @@ func NewAuthorsController(service *services.AuthorsService) *AuthorsController {
 }
 
 func authorRequestToServiceAuthor(req authorRequest) (*services.Author, error) {
-	headshot, err := requestImageToServiceImage(*req.Headshot)
+	options, err := collectAuthorOptionsFromRequest(req)
 	if err != nil {
 		return nil, err
 	}
-	return services.NewAuthor(
-		services.WithFirstName(*req.FirstName),
-		services.WithLastName(*req.LastName),
-		services.WithBio(*req.Bio),
-		services.WithImage(headshot),
-	)
+	if len(options) == 0 {
+		return nil, errors.New("No fields provided")
+	}
+	return services.NewAuthor(options...)
 }
 
 func serviceAuthorToAuthorResponse(author *services.AuthorOutput) authorResponse {
@@ -140,8 +137,8 @@ func (c *AuthorsController) getAuthorByID(ctx *gin.Context, ID string, includeIm
 		return
 	}
 
-	resp := serviceAuthorToAuthorResponse(author)
-	ctx.JSON(http.StatusOK, gin.H{"author": resp})
+	res := serviceAuthorToAuthorResponse(author)
+	ctx.JSON(http.StatusOK, gin.H{"author": res})
 }
 
 func (c *AuthorsController) DeleteAuthor(ctx *gin.Context) {
@@ -169,7 +166,7 @@ func (c *AuthorsController) DeleteAuthor(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
-func collectUpdateAuthorOptions(req authorRequest) ([]services.AuthorOption, error) {
+func collectAuthorOptionsFromRequest(req authorRequest) ([]services.AuthorOption, error) {
 	options := make([]services.AuthorOption, 0)
 	if req.FirstName != nil {
 		options = append(options, services.WithFirstName(*req.FirstName))
@@ -181,11 +178,11 @@ func collectUpdateAuthorOptions(req authorRequest) ([]services.AuthorOption, err
 		options = append(options, services.WithBio(*req.Bio))
 	}
 	if req.Headshot != nil {
-		imageContent, err := files.GetMultipartFormContents(req.Headshot)
+		image, err := requestImageToServiceImage(*req.Headshot)
 		if err != nil {
 			return nil, err
 		}
-		options = append(options, services.WithImage(&services.Image{Name: req.Headshot.Filename, Content: imageContent}))
+		options = append(options, services.WithImage(image))
 	}
 	return options, nil
 }
@@ -199,19 +196,7 @@ func (c *AuthorsController) UpdateAuthor(ctx *gin.Context) {
 		return
 	}
 
-	options, err := collectUpdateAuthorOptions(req)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request"})
-		ctx.AbortWithError(http.StatusBadRequest, err)
-	}
-
-	if len(options) == 0 {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Must have at least one field to update"})
-		ctx.AbortWithError(http.StatusBadRequest, errors.New("Must have at least one field to update"))
-		return
-	}
-
-	author, err := services.NewAuthor(options...)
+	author, err := authorRequestToServiceAuthor(req)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create author"})
 		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to create author: %v", err))

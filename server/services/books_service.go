@@ -15,6 +15,8 @@ import (
 type BookRepository interface {
 	CreateBook(ctx context.Context, book *data.Book, commit chan bool) error
 	GetAllBooks(ctx context.Context) ([]*data.Book, error)
+	GetBook(ctx context.Context, ID string) (*data.Book, error)
+	UpdateBook(ctx context.Context, book data.Book, commit chan bool) error
 }
 
 type Book struct {
@@ -191,16 +193,6 @@ func (s *BooksService) AddBook(parent context.Context, b *Book) error {
 	return collectErrors(errChan)
 }
 
-func (s *AuthorsService) getCoverObjectKey(ctx context.Context, a *AuthorOutput) error {
-	fileName := files.CreateFriendlyFileName("", a.FirstName, a.LastName)
-	reference, err := s.ImageRepo.GetImageReference(ctx, fileName)
-	if err != nil {
-		return err
-	}
-	a.HeadshotObjectKey = reference
-	return nil
-}
-
 func dataBookToServiceBook(dataBook *data.Book) *BookOutput {
 	bo := &BookOutput{}
 	if dataBook.ID != nil {
@@ -228,20 +220,31 @@ func dataBookToServiceBook(dataBook *data.Book) *BookOutput {
 }
 
 func serviceBookToDataBook(serviceBook *Book) *data.Book {
-	authors := make([]*data.Author, 0, len(serviceBook.Authors))
-	for _, author := range serviceBook.Authors {
-		authors = append(authors, serviceAuthorToDataAuthor(&author))
+	var options []data.BookOption
+	if serviceBook.Title != nil {
+		options = append(options, data.WithTitle(*serviceBook.Title))
 	}
-	fmt.Printf("FName:%v, LName%v\n", *authors[0].FirstName, *authors[0].LastName)
-	return data.NewBook(
-		data.WithTitle(*serviceBook.Title),
-		data.WithSynopsis(*serviceBook.Synopsis),
-		data.WithSynopsis(*serviceBook.Synopsis),
-		data.WithPublishDate(*serviceBook.PublishDate),
-		data.WithPageCount(*serviceBook.PageCount),
-		data.WithAuthors(authors),
-		data.WithCategories(serviceBook.Categories),
-	)
+	if serviceBook.Synopsis != nil {
+		options = append(options, data.WithSynopsis(*serviceBook.Synopsis))
+	}
+	if serviceBook.PublishDate != nil {
+		options = append(options, data.WithPublishDate(*serviceBook.PublishDate))
+	}
+	if serviceBook.PageCount != nil {
+		options = append(options, data.WithPageCount(*serviceBook.PageCount))
+	}
+	if len(serviceBook.Authors) > 0 {
+		authors := make([]*data.Author, 0, len(serviceBook.Authors))
+		for _, author := range serviceBook.Authors {
+			authors = append(authors, serviceAuthorToDataAuthor(&author))
+		}
+		options = append(options, data.WithAuthors(authors))
+	}
+	if len(serviceBook.Categories) > 0 {
+		options = append(options, data.WithCategories(serviceBook.Categories))
+	}
+
+	return data.NewBook(options...)
 }
 
 func (s *BooksService) getHeadshotObjectKey(ctx context.Context, b *BookOutput) error {
@@ -280,26 +283,19 @@ func (s *BooksService) GetAllBooks(parent context.Context, includeImages bool) (
 
 // GetAuthor retrieves data for one author associated with the provided ID. Retrieving image data may be a time intensive operation
 // so there is the option to skip retrieving the image if necessary
-func (s *AuthorsService) GetBook(parent context.Context, ID string, includeImage bool) (AuthorOutput, error) {
-	author, err := s.DataRepo.GetAuthor(parent, ID)
+func (s *BooksService) GetBook(parent context.Context, ID string, includeImage bool) (*BookOutput, error) {
+	book, err := s.DataRepo.GetBook(parent, ID)
 	if err != nil {
-		return AuthorOutput{}, err
+		return nil, err
 	}
-
-	ao := AuthorOutput{
-		ID:        ID,
-		FirstName: *author.FirstName,
-		LastName:  *author.LastName,
-		Bio:       *author.Bio,
-	}
-
+	bo := dataBookToServiceBook(book)
 	if includeImage {
-		err = s.getHeadshotObjectKey(parent, &ao)
+		err = s.getHeadshotObjectKey(parent, bo)
 		if err != nil {
-			return AuthorOutput{}, err
+			return nil, err
 		}
 	}
-	return ao, nil
+	return bo, nil
 }
 
 // DeleteAuthor deletes data for one author associated with the given ID including the base data and image. The deletion of base
@@ -346,18 +342,14 @@ func (s *AuthorsService) DeleteBook(parent context.Context, ID string) error {
 	return err
 }
 
-func (s *AuthorsService) UpdateBook(parent context.Context, ID string, a Author) error {
-	originalAuthor, err := s.DataRepo.GetAuthor(parent, ID)
+func (s *BooksService) UpdateBook(parent context.Context, ID string, b Book) error {
+	originalBook, err := s.DataRepo.GetBook(parent, ID)
 	if err != nil {
 		return err
 	}
 
-	updateAuthorData := &data.Author{
-		ID:        &ID,
-		FirstName: a.FirstName,
-		LastName:  a.LastName,
-		Bio:       a.Bio,
-	}
+	updateBookData := serviceBookToDataBook(&b)
+	updateBookData.ID = &ID
 
 	commitChan := make(chan bool, 1)
 	defer close(commitChan)
@@ -365,24 +357,24 @@ func (s *AuthorsService) UpdateBook(parent context.Context, ID string, a Author)
 
 	// If any of these fields have changed then the image needs to be updated with
 	// a new title or new content
-	if a.FirstName != nil || a.LastName != nil || a.Headshot != nil {
+	if b.Title != nil || b.Cover != nil {
 		ctx, cancel := context.WithCancel(parent)
 		defer cancel()
-		originalFilename := files.CreateFriendlyFileName("", *originalAuthor.FirstName, *originalAuthor.LastName)
-		updatedHeadshot := data.UpdateImageJSON{OriginalName: originalFilename}
+		originalFilename := files.CreateFriendlyFileName("", *originalBook.Title)
+		updatedCover := data.UpdateImageJSON{OriginalName: originalFilename}
 
-		if a.Headshot != nil {
-			updatedHeadshot.NewContent = a.Headshot.Content
-			updatedHeadshot.NewName = files.CreateFriendlyFileName(a.Headshot.Name, originalFilename)
+		if b.Cover != nil {
+			updatedCover.NewContent = b.Cover.Content
+			updatedCover.NewName = files.CreateFriendlyFileName(b.Cover.Name, originalFilename)
 		}
 
 		var wg sync.WaitGroup
 
-		if a.FirstName != nil || a.LastName != nil || a.Bio != nil {
+		if b.Title != nil || b.Synopsis != nil {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := s.DataRepo.UpdateAuthor(ctx, updateAuthorData, commitChan)
+				err := s.DataRepo.UpdateBook(ctx, *updateBookData, commitChan)
 				if err != nil {
 					errChan <- err
 					cancel()
@@ -393,14 +385,11 @@ func (s *AuthorsService) UpdateBook(parent context.Context, ID string, a Author)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if updateAuthorData.FirstName == nil {
-				updateAuthorData.FirstName = originalAuthor.FirstName
+			if updateBookData.Title == nil {
+				updateBookData.Title = originalBook.Title
 			}
-			if updateAuthorData.LastName == nil {
-				updateAuthorData.LastName = originalAuthor.LastName
-			}
-			updatedHeadshot.NewName = files.CreateFriendlyFileName(updatedHeadshot.NewName, *updateAuthorData.FirstName, *updateAuthorData.LastName)
-			err := s.ImageRepo.ReplaceImage(ctx, updatedHeadshot)
+			updatedCover.NewName = files.CreateFriendlyFileName(updatedCover.NewName, *updateBookData.Title)
+			err := s.ImageRepo.ReplaceImage(ctx, updatedCover)
 			if err != nil {
 				errChan <- err
 				commitChan <- false
@@ -413,6 +402,6 @@ func (s *AuthorsService) UpdateBook(parent context.Context, ID string, a Author)
 		return collectErrors(errChan)
 	} else {
 		commitChan <- true
-		return s.DataRepo.UpdateAuthor(parent, updateAuthorData, commitChan)
+		return s.DataRepo.UpdateBook(parent, *updateBookData, commitChan)
 	}
 }

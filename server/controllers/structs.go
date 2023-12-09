@@ -19,14 +19,14 @@ type authorResponse struct {
 }
 
 type bookRequest struct {
-	Title       string               `form:"title" binding:"required"`
-	Synopsis    string               `form:"synopsis"`
-	PublishDate string               `form:"publishDate" binding:"required"`
-	PageCount   int                  `form:"pageCount" binding:"required"`
-	Categories  []string             `form:"categories"`
-	Authors     []string             `form:"authors"`
-	Cover       multipart.FileHeader `form:"cover" binding:"required"`
-	ID          string               `form:"id"`
+	Title       *string               `form:"title" binding:"required"`
+	Synopsis    *string               `form:"synopsis"`
+	PublishDate *string               `form:"publishDate" binding:"required"`
+	PageCount   *int                  `form:"pageCount" binding:"required"`
+	Categories  []string              `form:"categories"`
+	Authors     []string              `form:"authors"`
+	Cover       *multipart.FileHeader `form:"cover" binding:"required"`
+	ID          *string               `form:"id"`
 }
 
 type bookResponse struct {

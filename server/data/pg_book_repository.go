@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -241,4 +242,77 @@ func (r *PostgresBookRepository) GetAllBooks(ctx context.Context) ([]*Book, erro
 		))
 	}
 	return books, nil
+}
+
+func (r *PostgresBookRepository) GetBook(ctx context.Context, ID string) (*Book, error) {
+	conn, err := r.connPool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := conn.QueryRow(ctx,
+		`SELECT 
+			b.id, b.title, b.synopsis, b.publish_date, b.page_count, 
+			array_agg(DISTINCT(a.id, a.first_name, a.last_name)) AS authors, 
+			array_agg(c.category_name) AS categories FROM books AS b
+		JOIN book_authors AS ba ON b.id = ba.book_id
+		JOIN authors AS a ON ba.author_id = a.id
+		JOIN book_categories AS bc ON b.id = bc.book_id
+		JOIN categories AS c ON bc.category_id = c.id
+		WHERE b.id=$1 GROUP BY b.id`, ID,
+	)
+
+	var rowID, rowPageCount int
+	var rowTitle, rowSynopsis string
+	var rowPublishDate time.Time
+	var rowAuthors []*Author
+	var rowCategories []string
+	err = row.Scan(&rowID, &rowTitle, &rowSynopsis, &rowPublishDate, &rowPageCount, &rowAuthors, &rowCategories)
+	if err != nil {
+		return nil, err
+	}
+	return NewBook(
+		WithBookID(ID),
+		WithTitle(rowTitle),
+		WithSynopsis(rowSynopsis),
+		WithPublishDate(rowPublishDate),
+		WithPageCount(rowPageCount),
+		WithAuthors(rowAuthors),
+		WithCategories(rowCategories),
+	), nil
+}
+
+func (r *PostgresBookRepository) UpdateBook(ctx context.Context, book Book, commitChan chan bool) error {
+	intID, err := strconv.ParseUint(*book.ID, 10, 64)
+	if err != nil {
+		return err
+	}
+	tx, err := r.connPool.BeginTx(ctx, pgx.TxOptions{})
+	defer tx.Rollback(context.Background())
+	if err != nil {
+		return err
+	}
+
+	// Get updated first and last name to update image name
+	_, err = tx.Exec(ctx,
+		`UPDATE books
+		SET
+			title=COALESCE($1, title),
+			synopsis=COALESCE($2, synopsis)
+		WHERE
+			id=$3`,
+		book.Title, book.Synopsis, intID)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case commit := <-commitChan:
+		if commit {
+			return tx.Commit(ctx)
+		}
+	}
+	return nil
 }
