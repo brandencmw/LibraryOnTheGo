@@ -1,10 +1,14 @@
+<?php
+require '../../auth.php';
+if (isset($_COOKIE['Authorization']) && authenticated($_COOKIE['Authorization'])) {
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Book</title>
-    <script src="../../authorize.js"></script>
 </head>
 <body>
     <h2>Search for Books on Google Books</h2>
@@ -51,3 +55,8 @@
 <script src="../../send-data.js"></script>
 </html>
 
+<?php
+} else {
+    header('../../../login/');
+}
+?>

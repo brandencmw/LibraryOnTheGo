@@ -10,21 +10,21 @@ async function getBooks() {
     return json.books
 }
 
-// async function deleteBook(id) {
-//     console.log(id)
-//     const url = "https://localhost:8080/authors/auth/delete?id="+id
-//     options = {
-//         method: "DELETE",
-//         credentials: "include",
-//         body: JSON.stringify({})
-//     }
-//     let response = await fetch(url, options)
-//     console.log(response)
-//     if (response.status != 200) {
-//         throw new Error(`Failed to delete author with ID ${id}`)
-//     }
-//     return response.json()
-// }
+async function deleteBook(id) {
+    console.log(id)
+    const url = "https://localhost:8080/books/auth/delete?id="+id
+    options = {
+        method: "DELETE",
+        credentials: "include",
+        body: JSON.stringify({})
+    }
+    let response = await fetch(url, options)
+    console.log(response)
+    if (response.status != 200) {
+        throw new Error(`Failed to delete book with ID ${id}`)
+    }
+    return response.json()
+}
 
 function insertRowContent(row, book) {
     let idCell = row.insertCell(0)
@@ -34,7 +34,7 @@ function insertRowContent(row, book) {
     titleCell.textContent = book.title
 
     let authorCell = row.insertCell(2)
-    authorCell.textContent = book.authors.join(", ")
+    authorCell.textContent = book.authors.map(author => author.firstName + " " + author.lastName).join(",")
 
     let actionCell = row.insertCell(3)
 
@@ -44,7 +44,7 @@ function insertRowContent(row, book) {
     deleteButton.addEventListener("click", event => {
         let buttonID = event.target.id
         let bookID = buttonID.split("-")[1]
-        deleteAuthor(bookID).catch(err => {
+        deleteBook(bookID).catch(err => {
             console.log(err)
         }).then(res => {
             console.log(res)
@@ -57,7 +57,7 @@ function insertRowContent(row, book) {
     updateButton.addEventListener("click", event => {
         let buttonID = event.target.id
         let bookID = buttonID.split("-")[1]
-        window.location.href = `/admin/authors/update?id=${bookID}`
+        window.location.href = `/admin/books/update?id=${bookID}`
     })
 
     actionCell.appendChild(updateButton)

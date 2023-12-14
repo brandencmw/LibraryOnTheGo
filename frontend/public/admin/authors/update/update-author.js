@@ -1,39 +1,12 @@
-async function getAuthorToUpdate(id) {
-    const url = "https://localhost:8080/authors?id=" + id
-    const response = await fetch(url, {method: "GET"})
-    if (!response.ok) {
-        throw new Error(`Failed to get author with ID ${id}`)
-    }
-    const json = await response.json()
-    return json.author
-}
-
-const params = new URLSearchParams(window.location.search)
-const strID = params.get("id")
 let valueMap = new Map()
-if (strID != null) {
-    const authorID = parseInt(strID)
-    getAuthorToUpdate(authorID)
-        .then(author => {
-            let fNameField = document.getElementById("authorFirstName")
-            fNameField.value = author.firstName
-            valueMap.set(fNameField.id, author.firstName)
+let fNameField = document.getElementById("authorFirstName")
+valueMap.set(fNameField.id, fNameField.value)
 
-            let lNameField = document.getElementById("authorLastName")
-            lNameField.value = author.lastName
-            valueMap.set(lNameField.id, author.lastName)
+let lNameField = document.getElementById("authorLastName")
+valueMap.set(lNameField.id, lNameField.value)
 
-            let bioField = document.getElementById("authorBio")
-            bioField.value = author.bio
-            valueMap.set(bioField.id, author.bio)
-
-            let headshotPreview = document.getElementById("headshotPreview")
-            headshotPreview.src = `https://library-pictures.s3.amazonaws.com/${author.headshotKey}`
-        })
-        .catch(err => console.log(err))
-} else {
-    console.log("Must have ID")
-}
+let bioField = document.getElementById("authorBio")
+valueMap.set(bioField.id, bioField.value)
 
 function goBack() {
     window.history.back()
@@ -72,7 +45,10 @@ updateAuthorForm.addEventListener("submit", event => {
 
     if (fields > 0) {
         sendDataToBackend(formData, "/authors/auth/update", "PUT")
-            .then(response => console.log(response))
+            .then(response => {
+                console.log(response)
+                location.reload()
+            })
             .catch(err => console.error(err))
     } else {
         console.log("No entries have changed")

@@ -1,15 +1,17 @@
 async function sendDataToBackend(formData, endpoint, method) {
-    url = "https://localhost:8080" + endpoint
+    const url = "https://localhost:8080" + endpoint
     const options = {
         method: method,
         credentials: "include",
         body: formData,
     }
 
-    response = await fetch(url, options)
+    
+    const response = await fetch(url, options)
+    const responseJSON = await response.json()
     if (!response.ok) {
-        throw new Error("Not OK")
+        throw new Error(responseJSON)
     }
-    responseJSON = await response.json()
+
     return responseJSON
 }

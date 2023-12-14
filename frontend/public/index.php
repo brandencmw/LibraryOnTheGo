@@ -17,6 +17,10 @@
     <div class="main-box">
         <header>
             <h1 class="main-heading">Branden's Library</h1>
+            <div class="header-links">
+                <a href="/authors">See all books</a>
+                <a href="/books">See all authors</a>
+            </div>
         </header>
 
         <div class="content">

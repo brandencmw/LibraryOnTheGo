@@ -1,14 +1,31 @@
-async function searchBook(title, author) {
+books = []
+
+function searchBook(title, author) {
     const reqTitle = encodeURI(title)
     const reqAuthor = encodeURI(author)
-    const url = "https://localhost:8083/book?title=" + reqTitle + "&author=" + reqAuthor
-    const res = await fetch(url)
-    if (!res.ok) {
-        throw new Error("Error searching")
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", `search_books.php?title=${reqTitle}&author=${reqAuthor}`)
+    xhr.setRequestHeader("Content-type", "application/json")
+    xhr.onload = function() {
+        console.log(xhr.responseText)
+        const res = JSON.parse(xhr.responseText)
+        const resultTableBody = document.getElementById("googleSearchResults").getElementsByTagName("tbody")[0]
+        books = res.books
+        for (let i = 0; i < books.length; i++) {
+            let row = resultTableBody.insertRow(-1)
+            insertRowContent(row, books[i])
+            row.id = "searchresult-" + i
+            row.addEventListener("click", event => {
+                const targetRow = event.target.closest("tr");
+                if (targetRow) {
+                    id = targetRow.id.split("-")[1]
+                    populateAddForm(id)
+                }
+            })
+        }
     }
-    json = await res.json()
-    console.log(json)
-    return json
+    xhr.send()
 }
 
 function insertRowContent(row, book) {
@@ -26,16 +43,13 @@ function insertRowContent(row, book) {
 }
 
 function populateAddForm(id) {
-    console.log(id)
     document.getElementById("addBookTitle").value = books[id].title
     document.getElementById("addBookAuthors").value = books[id].authors
-    document.getElementById("addBookPublishDate").value = books[id].publishDate
+    document.getElementById("addBookPublishDate").value =  books[id].publishDate
     document.getElementById("addBookPageCount").value = books[id].pageCount
     document.getElementById("addBookCategories").value = books[id].categories
     document.getElementById("addBookDescription").value = books[id].description
 }
-
-books = []
 
 const searchForm = document.getElementById("googleBookSearchForm")
 
@@ -46,23 +60,4 @@ searchForm.addEventListener("submit", event => {
     const searchAuthor = document.getElementById("googleBookAuthor").value
 
     searchBook(searchTitle, searchAuthor)
-        .then(res => {
-            const resultTableBody = document.getElementById("googleSearchResults").getElementsByTagName("tbody")[0]
-            books = res.books
-            for (let i = 0; i < books.length; i++) {
-                let row = resultTableBody.insertRow(-1)
-                insertRowContent(row, books[i])
-                row.id = "searchresult-" + i
-                row.addEventListener("click", event => {
-                    const targetRow = event.target.closest("tr");
-                    if (targetRow) {
-                        id = targetRow.id.split("-")[1]
-                        populateAddForm(id)
-                    }
-                })
-            }
-        })
-        .catch(err => {
-            console.log(err)
-        })
 })

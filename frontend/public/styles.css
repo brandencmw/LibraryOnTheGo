@@ -30,7 +30,9 @@ h2, h3, h4, h5, h6 {
 }
 
 a {
-    color: #2D5DA1;
+    text-decoration: none;
+    color: #FFFFFF;
+    font-family: 'Poppins', sans-serif;
     transition: 0.15s color ease-in-out;
 }
 
@@ -62,6 +64,12 @@ form {
     flex-direction: column;
     width: 80%;
     justify-content: center;
+}
+
+.header-links {
+    display: flex;
+    width: 100%;
+    justify-content: space-evenly;
 }
 
 .content {

@@ -1,5 +1,9 @@
-FROM httpd:latest
+FROM php:8.0-apache
 
-COPY ./public/ /usr/local/apache2/htdocs/
+COPY ./httpd.conf /usr/local/apache2/conf/httpd.conf
+COPY ./localhost.conf /etc/apache2/sites-available/localhost-ssl.conf
+COPY ./public/ /var/www/html
 
-EXPOSE 80
+RUN ln -s /etc/apache2/mods-available/ssl.load /etc/apache2/mods-enabled/ssl.load && ln -s /etc/apache2/sites-available/localhost-ssl.conf /etc/apache2/sites-enabled/localhost-ssl.conf
+
+EXPOSE 443
