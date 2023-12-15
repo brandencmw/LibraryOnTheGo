@@ -10,7 +10,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@700&family=Montserrat:wght@100&family=Poppins:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather&family=Poppins&display=swap" rel="stylesheet">
     <title>Library</title>
 </head>
 <body>
@@ -18,8 +18,8 @@
         <header>
             <h1 class="main-heading">Branden's Library</h1>
             <div class="header-links">
-                <a href="/authors">See all books</a>
-                <a href="/books">See all authors</a>
+                <a href="/authors">See all authors</a>
+                <a href="/books">See all books</a>
             </div>
         </header>
 

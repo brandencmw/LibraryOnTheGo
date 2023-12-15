@@ -17,16 +17,15 @@ html {
 
 h1 {
     font-size: 60px;
-    font-family: 'Alegreya SC', serif;
-    font-weight: 800;
+    font-family: 'Merriweather', serif;
+    font-weight: 500;
     letter-spacing: 2px;
     color: #FEFEFA;
 }
 
 h2, h3, h4, h5, h6 {
-    font-family: 'Poppins', sans-serif;
-    font-weight: 500;
-    color: #333333;
+    color: #444444;
+    font-family: 'Merriweather', serif;
 }
 
 a {
@@ -120,4 +119,135 @@ form {
 
 .copyright {
     font-size: 12px;
+}
+
+.nav {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: auto;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.nav-icon {
+    margin-left: 20px;
+}
+
+.nav-items {
+    flex-grow: 1;
+    justify-content: end;
+    align-items: center;
+    display: flex;
+    margin-right: 20px;
+}
+
+.nav-links {
+    align-self: right;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+}
+
+.navbar-item {
+    display: inline;
+    margin: 0 10px;
+}
+
+.navbar-link {
+    text-decoration: none;
+    color: #FEFEFA;
+    font-size: 16px;
+}
+
+.nav-search {
+    flex-grow: 1;
+    max-width: 40%;
+}
+
+.nav-search .search-form {
+    width: 100%;
+}
+
+.nav-search-terms {
+    border: none;
+    outline: none;
+    height: 32px;
+    width: 100%;
+    border-radius: 32px;
+    padding: 0 48px 0 20px;
+}
+
+.nav-search-terms:focus {
+    border: 3px solid #FFAA33;
+}
+
+
+/* Search Found Page */
+.results-frame {
+    margin: 20px 0;
+    padding: 60px;
+    border-radius: 28px;
+    width: 80%;
+    box-shadow: 15px 15px 8px -10px rgba(34, 36, 37, 0.5);
+    background-color: #FEFEFA;
+}
+
+.results-frame p {
+    color: #444444;
+}
+
+.results-frame a {
+    color: #222222;
+}
+
+.browse-content-box {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    justify-items: center;
+}
+
+.browse-card {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.browse-card-img {
+    min-height: 350px;
+    height: 350px;
+    width: 100%;
+}
+
+.browse-card-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.browse-card-content {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    flex-grow: 1;
+}
+
+.result-card-title {
+    margin-bottom: 10px;
+}
+
+.result-card-body {
+    flex-grow: 1;
+}
+
+.browse-card-content a {
+    padding: 10px 0;
+    justify-self: end;
 }
