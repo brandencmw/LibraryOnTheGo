@@ -25,8 +25,15 @@ if (isset($_COOKIE['Authorization']) && authenticated($_COOKIE['Authorization'])
         <tbody>
             <?php foreach ($books as $book) { ?>
             <tr id="book-<?php echo $book['id']; ?>">
+                <td><?php echo $book['id'] ?></td>
                 <td><?php echo $book['title']; ?></td>
-                <td><?php echo $book['authors']; ?></td>
+                <?php 
+                $authorList = array();
+                foreach ($book['authors'] as $author) { 
+                    $authorList[] = $author['firstName'] . ' ' . $author['lastName'];
+                }
+                ?>
+                <td><?php echo join($authorList); ?></td>
                 <td>
                     <button id="update-<?php echo $book['id'] ?>">Update</button>
                     <button id="delete-<?php echo $book['id'] ?>">Delete</button>
@@ -37,7 +44,7 @@ if (isset($_COOKIE['Authorization']) && authenticated($_COOKIE['Authorization'])
     </table>
 </body>
 <script src="./redirect.js"></script>
-<script src="./get-books.js"></script>
+<script src="./button-listeners.js"></script>
 </html>
 
 <?php

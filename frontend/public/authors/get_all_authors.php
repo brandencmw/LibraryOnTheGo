@@ -1,7 +1,15 @@
 <?php
-function getAuthors() : array {
+function getAuthors(string $order='', $name='') : array {
 
-    $get_all_endpoint = 'https://server/authors';
+    $get_all_endpoint = 'https://server/authors?page_size=20&include_images=true';
+    if ($order != '') {
+        $get_all_endpoint .= '&order=' . $order;
+    }
+
+    if ($name != '') {
+        $get_all_endpoint .= '&name=' . $name;
+    }
+
     $ch = curl_init($get_all_endpoint);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
     curl_setopt($ch, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_3);

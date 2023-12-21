@@ -13,6 +13,7 @@ function getBookToUpdate(string $id) {
     $json_response = curl_exec($ch);
     if (curl_errno($ch)) {
         echo ''. curl_error($ch);
+        return null;
     }
     curl_close($ch);
 
@@ -34,7 +35,6 @@ if (isset($_COOKIE['Authorization']) && authenticated($_COOKIE['Authorization'])
         if ($book == null) {
             header('Location: ../');
         }
-        var_dump($book);
 ?>
 
         <!DOCTYPE html>

@@ -1,11 +1,18 @@
 async function deleteAuthor(id) {
-    const res = await fetch(`https://localhost:8082/admin/authors/delete_author.php?id=${id}`, {method: "DELETE"})
-    console.log(res)
+    const xhr = new XMLHttpRequest();
+    xhr.open("DELETE", `delete_author.php?id=${id}`)
+    xhr.onload = function() {
+        if (xhr.status != 200) {
+            throw new Error(xhr.statusText)
+        } else {
+            window.location.reload()
+        }
+    }
+    xhr.send()
 }
 
 const buttons = document.getElementsByTagName("button");
 for (const button of buttons) {
-    console.log(button)
     const buttonPrefix = button.id.split("-")[0]
     if (buttonPrefix == "update") {
         button.addEventListener("click", _ => {

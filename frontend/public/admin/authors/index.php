@@ -5,7 +5,7 @@
 
     if (isset($_COOKIE['Authorization']) && authenticated($_COOKIE['Authorization'])) {
         // Get result into array
-        $authors = getAuthors();
+        $authors = getAdminAuthors();
 ?>
 
 <!DOCTYPE html>
